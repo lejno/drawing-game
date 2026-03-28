@@ -4,3 +4,5 @@ I CAN ACCESS IT WITH THE ID FROM THE SERVER
 EMIT WHOLE GAME STATE??
 
 REQ CHATS,DRAWINGBOARD, PLAYERS?
+
+dont emit every stroke?? store it and render it every second?

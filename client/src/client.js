@@ -25,6 +25,9 @@ socket.on("room created", (roomId) => {
 socket.on("room joined", (roomId) => {
   window.location.href = `/room/${roomId}`;
 });
+export function reqRoomData(roomId) {
+  socket.emit("request room data", roomId);
+}
 
 export function reqSendMessage(msg, roomId) {
   socket.emit("send message", msg, roomId);

@@ -1,9 +1,26 @@
 import { useEffect, useRef } from "react";
 import { reqCreateRoom, reqJoinRoom } from "./client";
+import socket from "./client";
+import { useNavigate } from "react-router-dom";
 
 export default function Home() {
   const createNameRef = useRef();
   const joinIdRef = useRef();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    function handleRoomNavigate(roomId) {
+      navigate(`/room/${roomId}`);
+    }
+
+    socket.on("room created", handleRoomNavigate);
+    socket.on("room joined", handleRoomNavigate);
+
+    return () => {
+      socket.off("room created", handleRoomNavigate);
+      socket.off("room joined", handleRoomNavigate);
+    };
+  }, [navigate]);
 
   function handleCreate(e) {
     e.preventDefault();

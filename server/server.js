@@ -24,14 +24,15 @@ function handleCreateRoom(socket, name) {
   rooms.set(roomId, {
     name: name,
     players: [],
-    gameState: "waiting",
     word: null,
     messages: [],
   });
 
   const room = rooms.get(roomId);
   socket.join(roomId);
+  socket.emit("room created", roomId);
   io.to(roomId).emit("msg", `room ${room.name} created id: ${roomId}`);
+  io.to(roomId).emit("room sent", room);
   console.log(`${roomId}`);
 }
 function handleJoinRoom(socket, roomId) {
@@ -45,12 +46,29 @@ function handleJoinRoom(socket, roomId) {
   console.log(`${socket.id} joined ${room.name} ${roomId}`);
   socket.join(roomId);
   socket.emit("room joined", roomId);
+  io.to(roomId).emit("room sent", room);
 }
 
 function handleSendMessage(socket, msg, roomId) {
   const room = rooms.get(roomId);
+  if (!room) {
+    socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
   room.messages.push({ id: socket.id, text: msg });
-  console.log(room);
+  io.to(roomId).emit("room sent", room);
+}
+
+function handleRoomData(socket, roomId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
+  socket.join(roomId);
+  socket.emit("room sent", room);
 }
 
 io.on("connection", (socket) => {
@@ -64,6 +82,9 @@ io.on("connection", (socket) => {
   });
   socket.on("send message", (msg, roomId) => {
     handleSendMessage(socket, msg, roomId);
+  });
+  socket.on("request room data", (roomId) => {
+    handleRoomData(socket, roomId);
   });
   socket.on("disconnect", (socket) => {
     console.log(`${socket.id} disconnected`);
