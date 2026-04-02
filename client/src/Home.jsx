@@ -8,6 +8,13 @@ export default function Home() {
   const joinIdRef = useRef();
   const navigate = useNavigate();
 
+  // to implement
+  // on draw => send arrays of pixels?
+  // erase => no idea
+  // on player joined??
+  // declare end of turn
+  // on end of turn => generate new word, distribute points
+
   useEffect(() => {
     function handleRoomNavigate(roomId) {
       navigate(`/room/${roomId}`);

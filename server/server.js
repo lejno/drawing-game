@@ -26,6 +26,7 @@ function handleCreateRoom(socket, name) {
     players: [],
     word: null,
     messages: [],
+    drawingData: [],
   });
 
   const room = rooms.get(roomId);
@@ -35,6 +36,7 @@ function handleCreateRoom(socket, name) {
   io.to(roomId).emit("room sent", room);
   console.log(`${roomId}`);
 }
+
 function handleJoinRoom(socket, roomId) {
   const room = rooms.get(roomId);
   if (!room) {
@@ -56,8 +58,9 @@ function handleSendMessage(socket, msg, roomId) {
     return;
   }
 
-  room.messages.push({ id: socket.id, text: msg });
-  io.to(roomId).emit("room sent", room);
+  const newMessage = { id: socket.id, text: msg };
+  room.messages.push(newMessage);
+  io.to(roomId).emit("new message", newMessage);
 }
 
 function handleRoomData(socket, roomId) {
@@ -69,6 +72,64 @@ function handleRoomData(socket, roomId) {
 
   socket.join(roomId);
   socket.emit("room sent", room);
+}
+
+function handleDrawStroke(socket, stroke, roomId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
+  const nextStroke = {
+    x0: Number(stroke.x0),
+    y0: Number(stroke.y0),
+    x1: Number(stroke.x1),
+    y1: Number(stroke.y1),
+    color: stroke.color,
+    lineWidth: Number(stroke.lineWidth),
+    strokeId: stroke.strokeId,
+  };
+
+  room.drawingData.push(nextStroke);
+  io.to(roomId).emit("draw stroke", nextStroke);
+}
+
+function handleUndoStroke(socket, roomId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
+  if (room.drawingData.length === 0) {
+    return;
+  }
+
+  const lastStroke = room.drawingData[room.drawingData.length - 1];
+  const lastStrokeId = lastStroke.strokeId;
+
+  if (lastStrokeId) {
+    room.drawingData = room.drawingData.filter(
+      (stroke) => stroke.strokeId !== lastStrokeId,
+    );
+    io.to(roomId).emit("stroke undone", { strokeId: lastStrokeId });
+    return;
+  }
+
+  room.drawingData.pop();
+  io.to(roomId).emit("stroke undone", { strokeId: null });
+}
+
+function handleClearDrawing(socket, roomId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
+  room.drawingData = [];
+  io.to(roomId).emit("drawing cleared");
 }
 
 io.on("connection", (socket) => {
@@ -86,8 +147,17 @@ io.on("connection", (socket) => {
   socket.on("request room data", (roomId) => {
     handleRoomData(socket, roomId);
   });
-  socket.on("disconnect", (socket) => {
-    console.log(`${socket.id} disconnected`);
+  socket.on("draw stroke", (stroke, roomId) => {
+    handleDrawStroke(socket, stroke, roomId);
+  });
+  socket.on("clear drawing", (roomId) => {
+    handleClearDrawing(socket, roomId);
+  });
+  socket.on("undo stroke", (roomId) => {
+    handleUndoStroke(socket, roomId);
+  });
+  socket.on("disconnect", (reason) => {
+    console.log(`${socket.id} disconnected: ${reason}`);
   });
 });
 

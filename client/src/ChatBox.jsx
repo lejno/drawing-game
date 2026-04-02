@@ -15,7 +15,7 @@ export default function ChatBox({ roomId, messages }) {
   function renderMessages(messages) {
     return messages.map((msg, index) => (
       <li key={index}>
-        `{msg.id}: {msg.text}`
+        {msg.id}: {msg.text}
       </li>
     ));
   }

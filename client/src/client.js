@@ -18,13 +18,18 @@ socket.on("error msg", (message) => {
   console.log(`ERROR: ${message}`);
 });
 
-socket.on("room created", (roomId) => {
-  window.location.href = `/room/${roomId}`;
-});
+export function reqDrawStroke(stroke, roomId) {
+  socket.emit("draw stroke", stroke, roomId);
+}
 
-socket.on("room joined", (roomId) => {
-  window.location.href = `/room/${roomId}`;
-});
+export function reqClearDrawing(roomId) {
+  socket.emit("clear drawing", roomId);
+}
+
+export function reqUndoStroke(roomId) {
+  socket.emit("undo stroke", roomId);
+}
+
 export function reqRoomData(roomId) {
   socket.emit("request room data", roomId);
 }
