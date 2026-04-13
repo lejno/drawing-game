@@ -3,7 +3,6 @@ import { reqSendMessage } from "./client";
 // import socket from "./client";
 
 export default function ChatBox({ roomId, messages }) {
-  //   const [messages, setMessages] = useState([]);
   const inputRef = useRef();
 
   function handleSubmit(e) {

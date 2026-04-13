@@ -18,6 +18,14 @@ socket.on("error msg", (message) => {
   console.log(`ERROR: ${message}`);
 });
 
+export function nextTurn(roomId) {
+  socket.emit("next turn", roomId);
+}
+
+export function startGame(roomId) {
+  socket.emit("start game", roomId);
+}
+
 export function reqDrawStroke(stroke, roomId) {
   socket.emit("draw stroke", stroke, roomId);
 }

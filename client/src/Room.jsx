@@ -1,21 +1,16 @@
 import { useParams } from "react-router-dom";
 import ChatBox from "./ChatBox";
-import socket, { reqRoomData } from "./client";
+import socket, { reqRoomData, startGame, nextTurn } from "./client";
 import { useEffect, useRef, useState } from "react";
-import Canvas from "./Canvas";
-
-// to implement
-// on draw => send arrays of pixels?
-// erase => no idea
-// on player joined??
-// declare end of turn
-// on end of turn => generate new word, distribute points
 
 export default function Room() {
   const { roomId } = useParams();
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [drawingData, setDrawingData] = useState([]);
+  const [players, setPlayers] = useState([]);
+  const [currentDrawerId, setCurrentDrawerId] = useState(null);
+  const [adminId, setAdminId] = useState(null);
+  const [gameStarted, setGameStarted] = useState(false);
   const renderCountRef = useRef(0);
   const prevRenderStateRef = useRef({ roomId: undefined, room: undefined });
 
@@ -40,7 +35,10 @@ export default function Room() {
     function onRoomSent(nextRoom) {
       setRoom(nextRoom);
       setMessages(nextRoom.messages ?? []);
-      setDrawingData(nextRoom.drawingData ?? []);
+      setPlayers(nextRoom.players ?? []);
+      setCurrentDrawerId(nextRoom.currentDrawerId ?? null);
+      setAdminId(nextRoom.adminId ?? null);
+      setGameStarted(nextRoom.started ?? false);
       console.log("[room sent]", nextRoom);
     }
 
@@ -48,46 +46,46 @@ export default function Room() {
       setMessages((prev) => [...prev, msg]);
     }
 
-    function onDrawStroke(stroke) {
-      setDrawingData((prev) => [...prev, stroke]);
-    }
-
-    function onDrawingCleared() {
-      setDrawingData([]);
-    }
-
-    function onStrokeUndone(payload) {
-      if (payload?.strokeId) {
-        setDrawingData((prev) =>
-          prev.filter((stroke) => stroke.strokeId !== payload.strokeId),
-        );
-        return;
-      }
-
-      setDrawingData((prev) => prev.slice(0, -1));
+    function onDrawerChanged({ drawerId, started }) {
+      setCurrentDrawerId(drawerId);
+      if (started !== undefined) setGameStarted(started);
     }
 
     socket.on("room sent", onRoomSent);
     socket.on("new message", onNewMessage);
-    socket.on("draw stroke", onDrawStroke);
-    socket.on("drawing cleared", onDrawingCleared);
-    socket.on("stroke undone", onStrokeUndone);
+    socket.on("drawer changed", onDrawerChanged);
     reqRoomData(roomId);
 
     return () => {
       socket.off("room sent", onRoomSent);
       socket.off("new message", onNewMessage);
-      socket.off("draw stroke", onDrawStroke);
-      socket.off("drawing cleared", onDrawingCleared);
-      socket.off("stroke undone", onStrokeUndone);
+      socket.off("drawer changed", onDrawerChanged);
     };
   }, [roomId]);
+
+  function renderPlayers(players) {
+    return players.map((player, index) => <li key={index}>{player}</li>);
+  }
 
   return (
     <div>
       <h1>Room: {room?.name}</h1>
-      <Canvas roomId={roomId} drawingData={drawingData} />
-      <ChatBox roomId={roomId} messages={messages}></ChatBox>
+      <div className="players-display">
+        <h2>Players:</h2>
+        <ul>{renderPlayers(players)}</ul>
+      </div>
+
+      <div className="chatbox-display">
+        <h2>Chat:</h2>
+        <ChatBox roomId={roomId} messages={messages} />
+      </div>
+      {currentDrawerId === socket.id && <p>YOUR TURN</p>}
+      {adminId === socket.id && !gameStarted && (
+        <button onClick={() => startGame(roomId)}>Start</button>
+      )}
+      {currentDrawerId === socket.id && (
+        <button onClick={() => nextTurn(roomId)}>End Turn</button>
+      )}
     </div>
   );
 }
