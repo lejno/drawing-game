@@ -1,0 +1,4 @@
+give interactivity to the currentDrawer;
+number of rounds infinite for now.
+score
+guesssing 

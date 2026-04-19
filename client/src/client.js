@@ -22,6 +22,10 @@ export function nextTurn(roomId) {
   socket.emit("next turn", roomId);
 }
 
+export function reqChooseWord(roomId, chosenWord) {
+  socket.emit("word chosen", roomId, chosenWord);
+}
+
 export function startGame(roomId) {
   socket.emit("start game", roomId);
 }

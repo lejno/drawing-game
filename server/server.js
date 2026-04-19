@@ -73,10 +73,65 @@ function handleJoinRoom(socket, roomId) {
   io.to(roomId).emit("room sent", room);
 }
 
+function levenshtein(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) =>
+      i === 0 ? j : j === 0 ? i : 0,
+    ),
+  );
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
 function handleSendMessage(socket, msg, roomId) {
   const room = rooms.get(roomId);
   if (!room) {
     socket.emit("error msg", "Room does not exist");
+    return;
+  }
+  function checkAnswer(roomWord, msg) {
+    if (!roomWord) return false;
+    const word = roomWord.trim().toLowerCase();
+    const text = msg.trim().toLowerCase();
+    const wordRegex = new RegExp(`\\b${word}\\b`);
+    return wordRegex.test(text);
+  }
+
+  function checkClose(roomWord, msg) {
+    if (!roomWord) return null;
+    const word = roomWord.trim().toLowerCase();
+    const msgWords =
+      msg
+        .trim()
+        .toLowerCase()
+        .match(/[a-z']+/g) || [];
+    for (const w of msgWords) {
+      if (w === word) continue;
+      if (levenshtein(w, word) <= 1 || w.includes(word) || word.includes(w)) {
+        return w;
+      }
+    }
+    return null;
+  }
+
+  if (checkAnswer(room.word, msg)) {
+    io.to(roomId).emit("correct answer", { id: socket.id });
+    const guessMsg = { id: "system", text: `${socket.id} guessed the word!` };
+    room.messages.push(guessMsg);
+    io.to(roomId).emit("new message", guessMsg);
+    return;
+  }
+
+  const closeWord = checkClose(room.word, msg);
+  if (closeWord) {
+    socket.emit("close answer", { word: closeWord });
     return;
   }
 
@@ -193,21 +248,8 @@ function handleNextTurn(roomId) {
     room.alreadyPlayed.push(room.currentDrawerId);
   }
 
-  if (room.toBePlayed.length > 0) {
-    let currentDrawer = room.toBePlayed.shift();
-    room.currentDrawerId = currentDrawer;
-    const random3 = getRandomWords(3);
-    io.to(currentDrawer).emit("msg", `choose a word: ${random3}`);
-    io.to(roomId).emit("drawer changed", {
-      drawerId: currentDrawer,
-    });
-    console.log(
-      "current drawer:",
-      currentDrawer,
-      "remaining:",
-      room.toBePlayed.length,
-    );
-  } else {
+  if (room.toBePlayed.length === 0) {
+    // readd alreadyplayed to tobeplayed
     const playersStillInRoom = room.alreadyPlayed.filter((pid) =>
       room.players.includes(pid),
     );
@@ -219,15 +261,43 @@ function handleNextTurn(roomId) {
       io.to(roomId).emit("drawer changed", { drawerId: null });
       return;
     }
-
-    let currentDrawer = room.toBePlayed.shift();
-    room.currentDrawerId = currentDrawer;
-    const random3 = getRandomWords(3);
-    io.to(currentDrawer).emit("msg", `choose a word: ${random3}`);
-    io.to(roomId).emit("drawer changed", {
-      drawerId: currentDrawer,
-    });
   }
+
+  let currentDrawer = room.toBePlayed.shift();
+  room.currentDrawerId = currentDrawer;
+  room.word = null;
+  const random3 = getRandomWords(3);
+  io.to(roomId).emit("drawer changed", {
+    drawerId: currentDrawer,
+  });
+  io.to(currentDrawer).emit("choose a word", random3);
+  console.log(
+    "current drawer:",
+    currentDrawer,
+    "remaining:",
+    room.toBePlayed.length,
+  );
+}
+
+function handleWordChosen(socket, roomId, chosenWord) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
+  if (room.currentDrawerId !== socket.id) {
+    socket.emit("error msg", "Only current drawer can choose a word");
+    return;
+  }
+
+  if (typeof chosenWord !== "string" || chosenWord.trim().length === 0) {
+    socket.emit("error msg", "Invalid word selected");
+    return;
+  }
+
+  room.word = chosenWord.trim().toLowerCase();
+  io.to(roomId).emit("word selected");
 }
 
 // function handleEndTurn(socket, roomId) {
@@ -285,6 +355,9 @@ io.on("connection", (socket) => {
     }
 
     handleNextTurn(roomId);
+  });
+  socket.on("word chosen", (roomId, chosenWord) => {
+    handleWordChosen(socket, roomId, chosenWord);
   });
   socket.on("disconnect", (reason) => {
     console.log(`${socket.id} disconnected: ${reason}`);

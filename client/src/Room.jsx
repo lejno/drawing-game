@@ -1,6 +1,11 @@
 import { useParams } from "react-router-dom";
 import ChatBox from "./ChatBox";
-import socket, { reqRoomData, startGame, nextTurn } from "./client";
+import socket, {
+  reqRoomData,
+  startGame,
+  nextTurn,
+  reqChooseWord,
+} from "./client";
 import { useEffect, useRef, useState } from "react";
 
 export default function Room() {
@@ -11,6 +16,8 @@ export default function Room() {
   const [currentDrawerId, setCurrentDrawerId] = useState(null);
   const [adminId, setAdminId] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
+  const [wordChoices, setWordChoices] = useState([]);
+  const [hasChosenWord, setHasChosenWord] = useState(false);
   const renderCountRef = useRef(0);
   const prevRenderStateRef = useRef({ roomId: undefined, room: undefined });
 
@@ -49,19 +56,43 @@ export default function Room() {
     function onDrawerChanged({ drawerId, started }) {
       setCurrentDrawerId(drawerId);
       if (started !== undefined) setGameStarted(started);
+      setWordChoices([]);
+      setHasChosenWord(false);
+    }
+
+    function onChooseWord(words) {
+      if (Array.isArray(words)) {
+        setWordChoices(words);
+        setHasChosenWord(false);
+      }
+    }
+
+    function onWordSelected() {
+      setWordChoices([]);
+      setHasChosenWord(true);
     }
 
     socket.on("room sent", onRoomSent);
     socket.on("new message", onNewMessage);
     socket.on("drawer changed", onDrawerChanged);
+    socket.on("choose a word", onChooseWord);
+    socket.on("word selected", onWordSelected);
     reqRoomData(roomId);
 
     return () => {
       socket.off("room sent", onRoomSent);
       socket.off("new message", onNewMessage);
       socket.off("drawer changed", onDrawerChanged);
+      socket.off("choose a word", onChooseWord);
+      socket.off("word selected", onWordSelected);
     };
   }, [roomId]);
+
+  function handleWordChoose(word) {
+    reqChooseWord(roomId, word);
+    setWordChoices([]);
+    setHasChosenWord(true);
+  }
 
   function renderPlayers(players) {
     return players.map((player, index) => <li key={index}>{player}</li>);
@@ -82,6 +113,19 @@ export default function Room() {
       {currentDrawerId === socket.id && <p>YOUR TURN</p>}
       {adminId === socket.id && !gameStarted && (
         <button onClick={() => startGame(roomId)}>Start</button>
+      )}
+      {currentDrawerId === socket.id && wordChoices.length > 0 && (
+        <div>
+          <p>Choose a word:</p>
+          {wordChoices.map((word) => (
+            <button key={word} onClick={() => handleWordChoose(word)}>
+              {word}
+            </button>
+          ))}
+        </div>
+      )}
+      {currentDrawerId === socket.id && hasChosenWord && (
+        <p>Word selected. Start drawing!</p>
       )}
       {currentDrawerId === socket.id && (
         <button onClick={() => nextTurn(roomId)}>End Turn</button>
