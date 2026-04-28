@@ -18,8 +18,30 @@ export default function Room() {
   const [gameStarted, setGameStarted] = useState(false);
   const [wordChoices, setWordChoices] = useState([]);
   const [hasChosenWord, setHasChosenWord] = useState(false);
+  const [pickEndsAt, setPickEndsAt] = useState(null);
+  const [roundEndsAt, setRoundEndsAt] = useState(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const renderCountRef = useRef(0);
   const prevRenderStateRef = useRef({ roomId: undefined, room: undefined });
+
+  useEffect(() => {
+    if (!pickEndsAt && !roundEndsAt) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      setNowMs(Date.now());
+    }, 250);
+
+    return () => clearInterval(intervalId);
+  }, [pickEndsAt, roundEndsAt]);
+
+  const pickSecondsLeft = pickEndsAt
+    ? Math.max(0, Math.ceil((pickEndsAt - nowMs) / 1000))
+    : 0;
+  const roundSecondsLeft = roundEndsAt
+    ? Math.max(0, Math.ceil((roundEndsAt - nowMs) / 1000))
+    : 0;
 
   useEffect(() => {
     renderCountRef.current += 1;
@@ -46,6 +68,10 @@ export default function Room() {
       setCurrentDrawerId(nextRoom.currentDrawerId ?? null);
       setAdminId(nextRoom.adminId ?? null);
       setGameStarted(nextRoom.started ?? false);
+      setWordChoices(nextRoom.wordChoices ?? []);
+      setHasChosenWord(Boolean(nextRoom.word));
+      setPickEndsAt(nextRoom.pickDeadline ?? null);
+      setRoundEndsAt(nextRoom.roundDeadline ?? null);
       console.log("[room sent]", nextRoom);
     }
 
@@ -58,6 +84,8 @@ export default function Room() {
       if (started !== undefined) setGameStarted(started);
       setWordChoices([]);
       setHasChosenWord(false);
+      setPickEndsAt(null);
+      setRoundEndsAt(null);
     }
 
     function onChooseWord(words) {
@@ -72,11 +100,33 @@ export default function Room() {
       setHasChosenWord(true);
     }
 
+    function onPickTimerStarted({ endsAt }) {
+      setPickEndsAt(endsAt ?? null);
+    }
+
+    function onRoundTimerStarted({ endsAt }) {
+      setRoundEndsAt(endsAt ?? null);
+    }
+
+    function onRoundEnded() {
+      setRoundEndsAt(null);
+      setHasChosenWord(false);
+    }
+
+    function onWordAutoSelected() {
+      setWordChoices([]);
+      setHasChosenWord(true);
+    }
+
     socket.on("room sent", onRoomSent);
     socket.on("new message", onNewMessage);
     socket.on("drawer changed", onDrawerChanged);
     socket.on("choose a word", onChooseWord);
     socket.on("word selected", onWordSelected);
+    socket.on("pick timer started", onPickTimerStarted);
+    socket.on("round timer started", onRoundTimerStarted);
+    socket.on("round ended", onRoundEnded);
+    socket.on("word auto selected", onWordAutoSelected);
     reqRoomData(roomId);
 
     return () => {
@@ -85,6 +135,10 @@ export default function Room() {
       socket.off("drawer changed", onDrawerChanged);
       socket.off("choose a word", onChooseWord);
       socket.off("word selected", onWordSelected);
+      socket.off("pick timer started", onPickTimerStarted);
+      socket.off("round timer started", onRoundTimerStarted);
+      socket.off("round ended", onRoundEnded);
+      socket.off("word auto selected", onWordAutoSelected);
     };
   }, [roomId]);
 
@@ -117,6 +171,7 @@ export default function Room() {
       {currentDrawerId === socket.id && wordChoices.length > 0 && (
         <div>
           <p>Choose a word:</p>
+          <p>Time left: {pickSecondsLeft}s</p>
           {wordChoices.map((word) => (
             <button key={word} onClick={() => handleWordChoose(word)}>
               {word}
@@ -127,6 +182,7 @@ export default function Room() {
       {currentDrawerId === socket.id && hasChosenWord && (
         <p>Word selected. Start drawing!</p>
       )}
+      {roundSecondsLeft > 0 && <p>Round time left: {roundSecondsLeft}s</p>}
       {currentDrawerId === socket.id && (
         <button onClick={() => nextTurn(roomId)}>End Turn</button>
       )}

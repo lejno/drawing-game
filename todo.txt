@@ -1,4 +1,6 @@
-give interactivity to the currentDrawer;
-number of rounds infinite for now.
-score
-guesssing 
+timer
+
+ DONE next turn on everyone guessed the word
+not picking a word? auto word/skip
+afk drawer
+intermission between turns showing next player

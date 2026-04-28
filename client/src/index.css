@@ -1,0 +1,91 @@
+.join-create-room-wrapper {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid black;
+  justify-content: center;
+  gap: 20px;
+  align-items: center;
+  width: min(92vw, 520px);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.join-create-room-wrapper form {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 12px;
+  border: 1px solid black;
+  padding: 18px;
+  border-radius: 25px;
+  width: 100%;
+  max-width: 420px;
+  font-size: 1.1rem;
+  box-sizing: border-box;
+}
+
+.join-create-room-wrapper form input,
+.join-create-room-wrapper form button {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  font-size: clamp(1rem, 2.3vw, 1.25rem);
+  line-height: 1.2;
+  box-sizing: border-box;
+  border-radius: 8px;
+}
+
+.join-create-room-wrapper form input {
+  text-align: center;
+}
+
+.join-create-room-wrapper form input::placeholder {
+  text-align: center;
+}
+
+.main {
+  width: 80%;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  border: 1px solid black;
+  box-sizing: border-box;
+  padding: 12px;
+}
+
+@media (max-width: 600px) {
+  .join-create-room-wrapper {
+    width: 100%;
+    padding: 12px;
+    gap: 14px;
+  }
+
+  .join-create-room-wrapper form {
+    border-radius: 16px;
+    padding: 12px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .join-create-room-wrapper {
+    width: min(70vw, 760px);
+    gap: 28px;
+    padding: 28px;
+  }
+
+  .join-create-room-wrapper form {
+    max-width: 560px;
+    padding: 24px;
+    font-size: 1.25rem;
+  }
+
+  .join-create-room-wrapper form input,
+  .join-create-room-wrapper form button {
+    min-height: 60px;
+    font-size: 1.45rem;
+    padding: 12px 14px;
+  }
+}

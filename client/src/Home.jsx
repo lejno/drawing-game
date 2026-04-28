@@ -14,6 +14,9 @@ export default function Home() {
   // on player joined??
   // declare end of turn
   // on end of turn => generate new word, distribute points
+  function openBrowser() {
+    navigate("/rooms");
+  }
 
   useEffect(() => {
     function handleRoomNavigate(roomId) {
@@ -40,18 +43,25 @@ export default function Home() {
   }
 
   return (
-    <div>
-      <form onSubmit={handleCreate}>
-        <label htmlFor="room-name">Room Name</label>
-        <input id="room-name" ref={createNameRef} type="text" />
-        <button type="submit">Create Room</button>
-      </form>
-
-      <form onSubmit={handleJoin}>
-        <label htmlFor="room-id">Room ID</label>
-        <input id="room-id" ref={joinIdRef} type="text" />
-        <button type="submit">Join Room</button>
-      </form>
+    <div className="main">
+      <div className="join-create-room-wrapper">
+        <form onSubmit={handleCreate}>
+          <input id="room-name" ref={createNameRef} placeholder="Room Name" />
+          <button type="submit">Create Room</button>
+        </form>
+        <form onSubmit={handleJoin}>
+          <input
+            id="room-id"
+            ref={joinIdRef}
+            type="text"
+            placeholder="Room ID"
+          />
+          <button type="submit">Join Room</button>
+          <button type="button" onClick={() => openBrowser()}>
+            Browse Rooms
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
