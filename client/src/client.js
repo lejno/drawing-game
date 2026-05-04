@@ -18,6 +18,10 @@ socket.on("error msg", (message) => {
   console.log(`ERROR: ${message}`);
 });
 
+export function reqRoomsList(roomId) {
+  socket.emit("request rooms list", roomId);
+}
+
 export function nextTurn(roomId) {
   socket.emit("next turn", roomId);
 }

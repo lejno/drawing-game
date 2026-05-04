@@ -534,6 +534,14 @@ io.on("connection", (socket) => {
   socket.on("undo stroke", (roomId) => {
     handleUndoStroke(socket, roomId);
   });
+  socket.on("request rooms list", () => {
+    const roomsList = Array.from(rooms.entries()).map(([id, room]) => ({
+      id,
+      name: room.name,
+      playerCount: room.players.length,
+    }));
+    socket.emit("rooms list", roomsList);
+  });
   socket.on("start game", (roomId) => {
     handleStartGame(roomId);
   });
