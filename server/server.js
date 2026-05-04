@@ -44,6 +44,17 @@ function serializeRoom(room) {
 
 app.use(express.static(path.join(__dirname, "client/dist")));
 
+app.get("/api/rooms", (req, res) => {
+  const roomsList = Array.from(rooms.entries()).map(([id, room]) => ({
+    id,
+    name: room.name,
+    players: room.players.length,
+    maxPlayers: 4,
+    started: room.started,
+  }));
+  res.json(roomsList);
+});
+
 function clearPickTimer(roomId) {
   const pickTimer = pickTimers.get(roomId);
   if (pickTimer) {
@@ -596,3 +607,5 @@ app.get("/*splat", (req, res) => {
 server.listen(3000, () => {
   console.log("Socket server on http://localhost:3000");
 });
+
+module.exports = { rooms, io };
