@@ -32,7 +32,7 @@ function toolButtonStyle(isActive) {
   };
 }
 
-export default function Canvas({ roomId, drawingData }) {
+export default function Canvas({ roomId, drawingData, canDraw, overlayText }) {
   const canvasRef = useRef(null);
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef(null);
@@ -91,6 +91,10 @@ export default function Canvas({ roomId, drawingData }) {
   }
 
   function handlePointerDown(event) {
+    if (!canDraw) {
+      return;
+    }
+
     const point = getPoint(event);
     if (!point) {
       return;
@@ -165,10 +169,18 @@ export default function Canvas({ roomId, drawingData }) {
   }
 
   function handleClear() {
+    if (!canDraw) {
+      return;
+    }
+
     reqClearDrawing(roomId);
   }
 
   function handleUndo() {
+    if (!canDraw) {
+      return;
+    }
+
     reqUndoStroke(roomId);
   }
 
@@ -181,6 +193,10 @@ export default function Canvas({ roomId, drawingData }) {
         return;
       }
 
+      if (!canDraw) {
+        return;
+      }
+
       event.preventDefault();
       reqUndoStroke(roomId);
     }
@@ -190,7 +206,7 @@ export default function Canvas({ roomId, drawingData }) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [roomId]);
+  }, [roomId, canDraw]);
 
   return (
     <div>
@@ -216,6 +232,7 @@ export default function Canvas({ roomId, drawingData }) {
           onClick={() => setTool("draw")}
           aria-pressed={tool === "draw"}
           style={toolButtonStyle(tool === "draw")}
+          disabled={!canDraw}
         >
           Draw
         </button>
@@ -224,13 +241,14 @@ export default function Canvas({ roomId, drawingData }) {
           onClick={() => setTool("erase")}
           aria-pressed={tool === "erase"}
           style={toolButtonStyle(tool === "erase")}
+          disabled={!canDraw}
         >
           Eraser
         </button>
-        <button type="button" onClick={handleClear}>
+        <button type="button" onClick={handleClear} disabled={!canDraw}>
           Clear
         </button>
-        <button type="button" onClick={handleUndo}>
+        <button type="button" onClick={handleUndo} disabled={!canDraw}>
           Undo
         </button>
       </div>
@@ -242,7 +260,7 @@ export default function Canvas({ roomId, drawingData }) {
           style={{
             border: "1px solid #ccc",
             touchAction: "none",
-            cursor: "none",
+            cursor: canDraw ? "none" : "default",
           }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -250,7 +268,28 @@ export default function Canvas({ roomId, drawingData }) {
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
         />
-        {cursorPoint ? (
+        {overlayText ? (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              backgroundColor: "rgba(0, 0, 0, 0.7)",
+              color: "#ffffff",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              fontWeight: 700,
+              fontSize: "20px",
+              pointerEvents: "none",
+              textAlign: "center",
+              zIndex: 2,
+            }}
+          >
+            {overlayText}
+          </div>
+        ) : null}
+        {canDraw && cursorPoint ? (
           <div
             style={{
               position: "absolute",

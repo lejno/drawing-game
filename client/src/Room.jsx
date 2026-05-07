@@ -7,11 +7,13 @@ import socket, {
   reqChooseWord,
 } from "./client";
 import { useEffect, useRef, useState } from "react";
+import Canvas from "./Canvas";
 
 export default function Room() {
   const { roomId } = useParams();
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [drawingData, setDrawingData] = useState([]);
   const [players, setPlayers] = useState([]);
   const [currentDrawerId, setCurrentDrawerId] = useState(null);
   const [adminId, setAdminId] = useState(null);
@@ -20,12 +22,16 @@ export default function Room() {
   const [hasChosenWord, setHasChosenWord] = useState(false);
   const [pickEndsAt, setPickEndsAt] = useState(null);
   const [roundEndsAt, setRoundEndsAt] = useState(null);
+  const [intermissionEndsAt, setIntermissionEndsAt] = useState(null);
+  const [intermissionNextDrawerId, setIntermissionNextDrawerId] =
+    useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [errorMsg, setErrorMsg] = useState("");
   const renderCountRef = useRef(0);
   const prevRenderStateRef = useRef({ roomId: undefined, room: undefined });
 
   useEffect(() => {
-    if (!pickEndsAt && !roundEndsAt) {
+    if (!pickEndsAt && !roundEndsAt && !intermissionEndsAt) {
       return;
     }
 
@@ -34,13 +40,16 @@ export default function Room() {
     }, 250);
 
     return () => clearInterval(intervalId);
-  }, [pickEndsAt, roundEndsAt]);
+  }, [pickEndsAt, roundEndsAt, intermissionEndsAt]);
 
   const pickSecondsLeft = pickEndsAt
     ? Math.max(0, Math.ceil((pickEndsAt - nowMs) / 1000))
     : 0;
   const roundSecondsLeft = roundEndsAt
     ? Math.max(0, Math.ceil((roundEndsAt - nowMs) / 1000))
+    : 0;
+  const intermissionSecondsLeft = intermissionEndsAt
+    ? Math.max(0, Math.ceil((intermissionEndsAt - nowMs) / 1000))
     : 0;
 
   useEffect(() => {
@@ -64,6 +73,7 @@ export default function Room() {
     function onRoomSent(nextRoom) {
       setRoom(nextRoom);
       setMessages(nextRoom.messages ?? []);
+      setDrawingData(nextRoom.drawingData ?? []);
       setPlayers(nextRoom.players ?? []);
       setCurrentDrawerId(nextRoom.currentDrawerId ?? null);
       setAdminId(nextRoom.adminId ?? null);
@@ -72,11 +82,33 @@ export default function Room() {
       setHasChosenWord(Boolean(nextRoom.word));
       setPickEndsAt(nextRoom.pickDeadline ?? null);
       setRoundEndsAt(nextRoom.roundDeadline ?? null);
+      setIntermissionEndsAt(null);
+      setIntermissionNextDrawerId(null);
+      setErrorMsg("");
       console.log("[room sent]", nextRoom);
     }
 
     function onNewMessage(msg) {
       setMessages((prev) => [...prev, msg]);
+    }
+
+    function onDrawStroke(stroke) {
+      setDrawingData((prev) => [...prev, stroke]);
+    }
+
+    function onDrawingCleared() {
+      setDrawingData([]);
+    }
+
+    function onStrokeUndone(payload) {
+      if (payload?.strokeId) {
+        setDrawingData((prev) =>
+          prev.filter((stroke) => stroke.strokeId !== payload.strokeId),
+        );
+        return;
+      }
+
+      setDrawingData((prev) => prev.slice(0, -1));
     }
 
     function onDrawerChanged({ drawerId, started }) {
@@ -86,6 +118,8 @@ export default function Room() {
       setHasChosenWord(false);
       setPickEndsAt(null);
       setRoundEndsAt(null);
+      setIntermissionEndsAt(null);
+      setIntermissionNextDrawerId(null);
     }
 
     function onChooseWord(words) {
@@ -118,8 +152,22 @@ export default function Room() {
       setHasChosenWord(true);
     }
 
+    function onIntermissionStarted({ endsAt, nextDrawerId }) {
+      setIntermissionEndsAt(endsAt ?? null);
+      setIntermissionNextDrawerId(nextDrawerId ?? null);
+      setRoundEndsAt(null);
+      setHasChosenWord(false);
+    }
+
+    function onErrorMessage(message) {
+      setErrorMsg(message ?? "Something went wrong");
+    }
+
     socket.on("room sent", onRoomSent);
     socket.on("new message", onNewMessage);
+    socket.on("draw stroke", onDrawStroke);
+    socket.on("drawing cleared", onDrawingCleared);
+    socket.on("stroke undone", onStrokeUndone);
     socket.on("drawer changed", onDrawerChanged);
     socket.on("choose a word", onChooseWord);
     socket.on("word selected", onWordSelected);
@@ -127,11 +175,16 @@ export default function Room() {
     socket.on("round timer started", onRoundTimerStarted);
     socket.on("round ended", onRoundEnded);
     socket.on("word auto selected", onWordAutoSelected);
+    socket.on("intermission started", onIntermissionStarted);
+    socket.on("error msg", onErrorMessage);
     reqRoomData(roomId);
 
     return () => {
       socket.off("room sent", onRoomSent);
       socket.off("new message", onNewMessage);
+      socket.off("draw stroke", onDrawStroke);
+      socket.off("drawing cleared", onDrawingCleared);
+      socket.off("stroke undone", onStrokeUndone);
       socket.off("drawer changed", onDrawerChanged);
       socket.off("choose a word", onChooseWord);
       socket.off("word selected", onWordSelected);
@@ -139,8 +192,15 @@ export default function Room() {
       socket.off("round timer started", onRoundTimerStarted);
       socket.off("round ended", onRoundEnded);
       socket.off("word auto selected", onWordAutoSelected);
+      socket.off("intermission started", onIntermissionStarted);
+      socket.off("error msg", onErrorMessage);
     };
   }, [roomId]);
+
+  const intermissionText =
+    intermissionSecondsLeft > 0 && intermissionNextDrawerId
+      ? `its ${intermissionNextDrawerId} turn next (${intermissionSecondsLeft}s)`
+      : "";
 
   function handleWordChoose(word) {
     reqChooseWord(roomId, word);
@@ -153,39 +213,61 @@ export default function Room() {
   }
 
   return (
-    <div>
-      <h1>Room: {room?.name}</h1>
+    <div className="room-layout">
+      <div className="room-info">
+        <h1 className="room-name">Room: {room?.name}</h1>
+      </div>
       <div className="players-display">
         <h2>Players:</h2>
         <ul>{renderPlayers(players)}</ul>
       </div>
 
+      <div className="canvas-display">
+        <Canvas
+          roomId={roomId}
+          drawingData={drawingData}
+          canDraw={currentDrawerId === socket.id && hasChosenWord}
+          overlayText={intermissionText}
+        />
+      </div>
       <div className="chatbox-display">
         <h2>Chat:</h2>
         <ChatBox roomId={roomId} messages={messages} />
       </div>
-      {currentDrawerId === socket.id && <p>YOUR TURN</p>}
-      {adminId === socket.id && !gameStarted && (
-        <button onClick={() => startGame(roomId)}>Start</button>
-      )}
-      {currentDrawerId === socket.id && wordChoices.length > 0 && (
-        <div>
-          <p>Choose a word:</p>
-          <p>Time left: {pickSecondsLeft}s</p>
-          {wordChoices.map((word) => (
-            <button key={word} onClick={() => handleWordChoose(word)}>
-              {word}
-            </button>
-          ))}
-        </div>
-      )}
-      {currentDrawerId === socket.id && hasChosenWord && (
-        <p>Word selected. Start drawing!</p>
-      )}
-      {roundSecondsLeft > 0 && <p>Round time left: {roundSecondsLeft}s</p>}
-      {currentDrawerId === socket.id && (
-        <button onClick={() => nextTurn(roomId)}>End Turn</button>
-      )}
+      <div className="room-controls">
+        {errorMsg && <p>{errorMsg}</p>}
+        {currentDrawerId === socket.id && <p>YOUR TURN</p>}
+        {adminId === socket.id && !gameStarted && (
+          <button
+            onClick={() => startGame(roomId)}
+            disabled={players.length < 2}
+            title={players.length < 2 ? "Need at least 2 players" : ""}
+          >
+            Start
+          </button>
+        )}
+        {adminId === socket.id && !gameStarted && players.length < 2 && (
+          <p>Need at least 2 players to start.</p>
+        )}
+        {currentDrawerId === socket.id && wordChoices.length > 0 && (
+          <div className="choose-word">
+            <p>Choose a word:</p>
+            <p>Time left: {pickSecondsLeft}s</p>
+            {wordChoices.map((word) => (
+              <button key={word} onClick={() => handleWordChoose(word)}>
+                {word}
+              </button>
+            ))}
+          </div>
+        )}
+        {currentDrawerId === socket.id && hasChosenWord && (
+          <p>Word selected. Start drawing!</p>
+        )}
+        {roundSecondsLeft > 0 && <p>Round time left: {roundSecondsLeft}s</p>}
+        {currentDrawerId === socket.id && (
+          <button onClick={() => nextTurn(roomId)}>End Turn</button>
+        )}
+      </div>
     </div>
   );
 }

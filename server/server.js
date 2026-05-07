@@ -14,8 +14,10 @@ const { nanoid } = require("nanoid");
 const rooms = new Map();
 const pickTimers = new Map();
 const roundTimers = new Map();
+const intermissionTimers = new Map();
 const WORD_PICK_TIME_MS = 10_000;
-const ROUND_TIME_MS = 60_000;
+const ROUND_TIME_MS = 5_000;
+const ALL_GUESSED_INTERMISSION_MS = 5_000;
 
 const words = ["fish", "stone", "rock", "paper", "scissor"];
 
@@ -77,6 +79,15 @@ function clearRoundTimer(roomId) {
 function clearRoomTimers(roomId) {
   clearPickTimer(roomId);
   clearRoundTimer(roomId);
+  clearIntermissionTimer(roomId);
+}
+
+function clearIntermissionTimer(roomId) {
+  const intermissionTimer = intermissionTimers.get(roomId);
+  if (intermissionTimer) {
+    clearTimeout(intermissionTimer);
+    intermissionTimers.delete(roomId);
+  }
 }
 
 function startRoundTimer(roomId) {
@@ -99,9 +110,7 @@ function startRoundTimer(roomId) {
       return;
     }
 
-    clearRoundTimer(roomId);
-    io.to(roomId).emit("round ended", { reason: "time-up" });
-    handleNextTurn(roomId);
+    startIntermission(roomId, "time-up");
   }, ROUND_TIME_MS);
 
   roundTimers.set(roomId, roundTimer);
@@ -305,8 +314,83 @@ function maybeAdvanceIfAllGuessed(roomId) {
     return;
   }
 
-  io.to(roomId).emit("round ended", { reason: "all-guessed" });
-  handleNextTurn(roomId);
+  startIntermission(roomId, "all-guessed");
+}
+
+function clearDrawingForRoom(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    return;
+  }
+
+  if (room.drawingData.length === 0) {
+    return;
+  }
+
+  room.drawingData = [];
+  io.to(roomId).emit("drawing cleared");
+}
+
+function startIntermission(roomId, reason) {
+  const room = rooms.get(roomId);
+  if (!room || !room.currentDrawerId) {
+    return;
+  }
+
+  if (intermissionTimers.has(roomId)) {
+    return;
+  }
+
+  const nextDrawerId = getNextDrawerId(room);
+  clearPickTimer(roomId);
+  clearRoundTimer(roomId);
+  clearDrawingForRoom(roomId);
+
+  io.to(roomId).emit("round ended", { reason });
+  io.to(roomId).emit("intermission started", {
+    reason,
+    nextDrawerId,
+    durationMs: ALL_GUESSED_INTERMISSION_MS,
+    endsAt: Date.now() + ALL_GUESSED_INTERMISSION_MS,
+  });
+
+  const intermissionTimer = setTimeout(() => {
+    intermissionTimers.delete(roomId);
+    handleNextTurn(roomId);
+  }, ALL_GUESSED_INTERMISSION_MS);
+
+  intermissionTimers.set(roomId, intermissionTimer);
+}
+
+function getNextDrawerId(room) {
+  if (!room) {
+    return null;
+  }
+
+  const toBePlayed = [...room.toBePlayed];
+  const alreadyPlayed = [...room.alreadyPlayed];
+
+  if (
+    room.currentDrawerId &&
+    room.players.includes(room.currentDrawerId) &&
+    !alreadyPlayed.includes(room.currentDrawerId)
+  ) {
+    alreadyPlayed.push(room.currentDrawerId);
+  }
+
+  if (toBePlayed.length === 0) {
+    const playersStillInRoom = alreadyPlayed.filter((pid) =>
+      room.players.includes(pid),
+    );
+    const refilled = [...new Set(playersStillInRoom)];
+    if (refilled.length === 0) {
+      return null;
+    }
+
+    return refilled[0];
+  }
+
+  return toBePlayed[0];
 }
 
 function handleRoomData(socket, roomId) {
@@ -324,6 +408,11 @@ function handleDrawStroke(socket, stroke, roomId) {
   const room = rooms.get(roomId);
   if (!room) {
     socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
+  if (room.currentDrawerId !== socket.id) {
+    socket.emit("error msg", "Only current drawer can draw");
     return;
   }
 
@@ -347,6 +436,11 @@ function handleUndoStroke(socket, roomId) {
   const room = rooms.get(roomId);
   if (!room) {
     socket.emit("error msg", "Room does not exist");
+    return;
+  }
+
+  if (room.currentDrawerId !== socket.id) {
+    socket.emit("error msg", "Only current drawer can undo");
     return;
   }
 
@@ -380,6 +474,11 @@ function handleClearDrawing(socket, roomId) {
     return;
   }
 
+  if (room.currentDrawerId !== socket.id) {
+    socket.emit("error msg", "Only current drawer can clear canvas");
+    return;
+  }
+
   room.drawingData = [];
   io.to(roomId).emit("drawing cleared");
 }
@@ -410,6 +509,7 @@ function handleNextTurn(roomId) {
   }
 
   clearRoomTimers(roomId);
+  clearDrawingForRoom(roomId);
 
   if (
     room.currentDrawerId &&
@@ -557,7 +657,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    handleNextTurn(roomId);
+    startIntermission(roomId, "end-turn");
   });
   socket.on("word chosen", (roomId, chosenWord) => {
     handleWordChosen(socket, roomId, chosenWord);
