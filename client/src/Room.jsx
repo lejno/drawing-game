@@ -8,6 +8,8 @@ import socket, {
 } from "./client";
 import { useEffect, useRef, useState } from "react";
 import Canvas from "./Canvas";
+import PlayerCard from "./PlayerCard";
+import pfp from "./assets/pfp.webp";
 
 export default function Room() {
   const { roomId } = useParams();
@@ -199,7 +201,10 @@ export default function Room() {
 
   const intermissionText =
     intermissionSecondsLeft > 0 && intermissionNextDrawerId
-      ? `its ${intermissionNextDrawerId} turn next (${intermissionSecondsLeft}s)`
+      ? `its ${
+          players.find((player) => player.id === intermissionNextDrawerId)
+            ?.name ?? intermissionNextDrawerId
+        } turn next (${intermissionSecondsLeft}s)`
       : "";
 
   function handleWordChoose(word) {
@@ -209,7 +214,9 @@ export default function Room() {
   }
 
   function renderPlayers(players) {
-    return players.map((player, index) => <li key={index}>{player}</li>);
+    return players.map((player) => (
+      <PlayerCard player={player} key={player.id} pfp={pfp} />
+    ));
   }
 
   return (

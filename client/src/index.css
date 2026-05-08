@@ -92,6 +92,16 @@ body,
   grid-area: 2 / 5 / 6 / 6;
   border: 1px solid purple;
 }
+.player-card {
+  border: 1px solid grey;
+  font-size: 30px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.player-card img {
+  width: 50px;
+}
 
 .main {
   width: 80%;

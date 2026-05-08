@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { reqCreateRoom, reqJoinRoom } from "./client";
 import socket from "./client";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +7,7 @@ export default function Home() {
   const createNameRef = useRef();
   const joinIdRef = useRef();
   const navigate = useNavigate();
+  const joinNameRef = useRef();
 
   // to implement
   // on draw => send arrays of pixels?
@@ -17,6 +18,17 @@ export default function Home() {
   function openBrowser() {
     navigate("/rooms");
   }
+
+  function randomName() {
+    return (
+      "Player" +
+      Math.floor(Math.random() * 1000)
+        .toString()
+        .padStart(3, "0")
+    ).slice(0, 10);
+  }
+
+  const [defaultPlayerName] = useState(() => randomName());
 
   useEffect(() => {
     function handleRoomNavigate(roomId) {
@@ -34,16 +46,19 @@ export default function Home() {
 
   function handleCreate(e) {
     e.preventDefault();
-    reqCreateRoom(createNameRef.current.value);
+    reqCreateRoom(createNameRef.current.value, joinNameRef.current?.value);
   }
 
   function handleJoin(e) {
     e.preventDefault();
-    reqJoinRoom(joinIdRef.current.value);
+    reqJoinRoom(joinIdRef.current.value, joinNameRef.current?.value);
   }
 
   return (
     <div className="main">
+      <div className="playerPanel">
+        <input type="text" defaultValue={defaultPlayerName} ref={joinNameRef} />
+      </div>
       <div className="join-create-room-wrapper">
         <form onSubmit={handleCreate}>
           <input id="room-name" ref={createNameRef} placeholder="Room Name" />

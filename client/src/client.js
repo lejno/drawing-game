@@ -54,11 +54,11 @@ export function reqSendMessage(msg, roomId) {
   socket.emit("send message", msg, roomId);
   console.log(`${msg} ${socket.id}`);
 }
-export function reqJoinRoom(roomId) {
-  socket.emit("join room", roomId);
+export function reqJoinRoom(roomId, playerName) {
+  socket.emit("join room", roomId, playerName);
 }
-export function reqCreateRoom(name) {
-  socket.emit("create room", name);
+export function reqCreateRoom(name, playerName) {
+  socket.emit("create room", name, playerName);
 }
 
 export default socket;

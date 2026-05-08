@@ -16,7 +16,7 @@ const pickTimers = new Map();
 const roundTimers = new Map();
 const intermissionTimers = new Map();
 const WORD_PICK_TIME_MS = 10_000;
-const ROUND_TIME_MS = 5_000;
+const ROUND_TIME_MS = 10_000;
 const ALL_GUESSED_INTERMISSION_MS = 5_000;
 
 const words = ["fish", "stone", "rock", "paper", "scissor"];
@@ -161,7 +161,7 @@ function startPickTimer(roomId, wordChoices) {
   pickTimers.set(roomId, pickTimer);
 }
 
-function handleCreateRoom(socket, name) {
+function handleCreateRoom(socket, name, playerName) {
   let roomId = nanoid(6);
   while (rooms.has(roomId)) {
     roomId = nanoid(6);
@@ -187,21 +187,21 @@ function handleCreateRoom(socket, name) {
   const room = rooms.get(roomId);
   socket.join(roomId);
   socket.emit("room created", roomId);
-  room.players.push(socket.id);
+  room.players.push({ id: socket.id, name: playerName });
   room.toBePlayed.push(socket.id);
   io.to(roomId).emit("msg", `room ${room.name} created id: ${roomId}`);
   io.to(roomId).emit("room sent", serializeRoom(room));
   console.log(`${roomId}`);
 }
 
-function handleJoinRoom(socket, roomId) {
+function handleJoinRoom(socket, roomId, playerName) {
   const room = rooms.get(roomId);
   if (!room) {
     socket.emit("error msg", "Room does not exist");
     return;
   }
 
-  if (room.players.includes(socket.id)) {
+  if (room.players.some((player) => player.id === socket.id)) {
     socket.join(roomId);
     socket.emit("room joined", roomId);
     socket.emit("room sent", serializeRoom(room));
@@ -212,7 +212,7 @@ function handleJoinRoom(socket, roomId) {
   console.log(`${socket.id} joined ${room.name} ${roomId}`);
   socket.join(roomId);
   socket.emit("room joined", roomId);
-  room.players.push(socket.id);
+  room.players.push({ id: socket.id, name: playerName });
   room.toBePlayed.push(socket.id);
   io.to(roomId).emit("room sent", serializeRoom(room));
 }
@@ -275,7 +275,9 @@ function handleSendMessage(socket, msg, roomId) {
     }
 
     io.to(roomId).emit("correct answer", { id: socket.id });
-    const guessMsg = { id: "system", text: `${socket.id} guessed the word!` };
+    const guesser = room.players.find((player) => player.id === socket.id);
+    const guessName = guesser?.name ?? socket.id;
+    const guessMsg = { id: "system", text: `${guessName} guessed the word!` };
     room.guessedCurrentWord.push(socket.id);
     room.messages.push(guessMsg);
     io.to(roomId).emit("new message", guessMsg);
@@ -302,12 +304,12 @@ function maybeAdvanceIfAllGuessed(roomId) {
   }
 
   const guessersNeeded = room.players.filter(
-    (playerId) => playerId !== room.currentDrawerId,
+    (player) => player.id !== room.currentDrawerId,
   );
   const allGuessed =
     guessersNeeded.length > 0 &&
-    guessersNeeded.every((playerId) =>
-      room.guessedCurrentWord.includes(playerId),
+    guessersNeeded.every((player) =>
+      room.guessedCurrentWord.includes(player.id),
     );
 
   if (!allGuessed) {
@@ -372,7 +374,7 @@ function getNextDrawerId(room) {
 
   if (
     room.currentDrawerId &&
-    room.players.includes(room.currentDrawerId) &&
+    room.players.some((player) => player.id === room.currentDrawerId) &&
     !alreadyPlayed.includes(room.currentDrawerId)
   ) {
     alreadyPlayed.push(room.currentDrawerId);
@@ -380,7 +382,7 @@ function getNextDrawerId(room) {
 
   if (toBePlayed.length === 0) {
     const playersStillInRoom = alreadyPlayed.filter((pid) =>
-      room.players.includes(pid),
+      room.players.some((player) => player.id === pid),
     );
     const refilled = [...new Set(playersStillInRoom)];
     if (refilled.length === 0) {
@@ -513,7 +515,7 @@ function handleNextTurn(roomId) {
 
   if (
     room.currentDrawerId &&
-    room.players.includes(room.currentDrawerId) &&
+    room.players.some((player) => player.id === room.currentDrawerId) &&
     !room.alreadyPlayed.includes(room.currentDrawerId)
   ) {
     room.alreadyPlayed.push(room.currentDrawerId);
@@ -522,7 +524,7 @@ function handleNextTurn(roomId) {
   if (room.toBePlayed.length === 0) {
     // readd alreadyplayed to tobeplayed
     const playersStillInRoom = room.alreadyPlayed.filter((pid) =>
-      room.players.includes(pid),
+      room.players.some((player) => player.id === pid),
     );
     room.toBePlayed = [...new Set(playersStillInRoom)];
     room.alreadyPlayed = [];
@@ -613,11 +615,11 @@ function handleWordChosen(socket, roomId, chosenWord) {
 io.on("connection", (socket) => {
   console.log("a user connected:", socket.id);
 
-  socket.on("create room", (name) => {
-    handleCreateRoom(socket, name);
+  socket.on("create room", (name, playerName) => {
+    handleCreateRoom(socket, name, playerName);
   });
-  socket.on("join room", (roomId) => {
-    handleJoinRoom(socket, roomId);
+  socket.on("join room", (roomId, playerName) => {
+    handleJoinRoom(socket, roomId, playerName);
   });
   socket.on("send message", (msg, roomId) => {
     handleSendMessage(socket, msg, roomId);
@@ -666,7 +668,7 @@ io.on("connection", (socket) => {
     console.log(`${socket.id} disconnected: ${reason}`);
     rooms.forEach((room, roomId) => {
       const wasCurrentDrawer = room.currentDrawerId === socket.id;
-      room.players = room.players.filter((pid) => pid !== socket.id);
+      room.players = room.players.filter((player) => player.id !== socket.id);
       room.toBePlayed = room.toBePlayed.filter((pid) => pid !== socket.id);
       room.alreadyPlayed = room.alreadyPlayed.filter(
         (pid) => pid !== socket.id,
@@ -689,10 +691,13 @@ io.on("connection", (socket) => {
         room.currentDrawerId = null;
         if (room.started && room.players.length >= 2) {
           handleNextTurn(roomId);
+          return;
         }
       } else {
         maybeAdvanceIfAllGuessed(roomId);
       }
+
+      io.to(roomId).emit("room sent", serializeRoom(room));
     });
   });
 });
