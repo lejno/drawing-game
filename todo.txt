@@ -1,6 +1,6 @@
 timer
 
- DONE next turn on everyone guessed the word
 not picking a word? auto word/skip
 afk drawer
 intermission between turns showing next player
+check for 2 players every round

@@ -536,6 +536,14 @@ function handleNextTurn(roomId) {
     }
   }
 
+  if (room.players.length < 2) {
+    room.currentDrawerId = null;
+    io.to(roomId).emit("drawer changed", { drawerId: null });
+    room.started = false;
+    io.to(roomId).emit("room sent", serializeRoom(room));
+    return;
+  }
+
   let currentDrawer = room.toBePlayed.shift();
   room.currentDrawerId = currentDrawer;
   room.guessedCurrentWord = [];
@@ -668,6 +676,8 @@ io.on("connection", (socket) => {
     console.log(`${socket.id} disconnected: ${reason}`);
     rooms.forEach((room, roomId) => {
       const wasCurrentDrawer = room.currentDrawerId === socket.id;
+      const wasAdmin = room.adminId === socket.id;
+
       room.players = room.players.filter((player) => player.id !== socket.id);
       room.toBePlayed = room.toBePlayed.filter((pid) => pid !== socket.id);
       room.alreadyPlayed = room.alreadyPlayed.filter(
@@ -684,6 +694,12 @@ io.on("connection", (socket) => {
         return;
       }
 
+      // Pass admin privileges to another player if admin left
+      if (wasAdmin && room.players.length > 0) {
+        room.adminId = room.players[0].id;
+        console.log(`admin ${socket.id} left, new admin: ${room.adminId}`);
+      }
+
       if (wasCurrentDrawer) {
         clearRoomTimers(roomId);
         room.word = null;
@@ -692,6 +708,8 @@ io.on("connection", (socket) => {
         if (room.started && room.players.length >= 2) {
           handleNextTurn(roomId);
           return;
+        } else if (room.started && room.players.length < 2) {
+          room.started = false;
         }
       } else {
         maybeAdvanceIfAllGuessed(roomId);
