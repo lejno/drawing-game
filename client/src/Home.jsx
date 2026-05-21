@@ -44,22 +44,63 @@ export default function Home() {
     };
   }, [navigate]);
 
+  function submitError(inputRef, errorMsg) {
+    const input = inputRef.current;
+    if (!input) return;
+
+    if (!input.dataset.originalPlaceholder) {
+      input.dataset.originalPlaceholder = input.placeholder || "";
+    }
+
+    input.value = "";
+    input.placeholder = errorMsg;
+    input.classList.add("input-error");
+    input.focus();
+
+    input.addEventListener(
+      "input",
+      () => {
+        input.classList.remove("input-error");
+        input.placeholder = input.dataset.originalPlaceholder || "";
+      },
+      { once: true },
+    );
+  }
+
   function handleCreate(e) {
+    if (!createNameRef.current.value) {
+      createNameRef.current.value = "Room " + Math.floor(Math.random() * 1000);
+    }
     e.preventDefault();
     reqCreateRoom(createNameRef.current.value, joinNameRef.current?.value);
   }
 
   function handleJoin(e) {
     e.preventDefault();
+
+    if (!joinIdRef.current.value.trim()) {
+      submitError(joinIdRef, "Room ID is required");
+      return;
+    }
+
+    if (!joinNameRef.current.value.trim()) {
+      joinNameRef.current.value = defaultPlayerName;
+    }
+
     reqJoinRoom(joinIdRef.current.value, joinNameRef.current?.value);
   }
 
   return (
     <div className="main">
-      <div className="playerPanel">
-        <input type="text" defaultValue={defaultPlayerName} ref={joinNameRef} />
-      </div>
       <div className="join-create-room-wrapper">
+        {" "}
+        <div className="playerPanel">
+          <input
+            type="text"
+            defaultValue={defaultPlayerName}
+            ref={joinNameRef}
+          />
+        </div>
         <form onSubmit={handleCreate}>
           <input id="room-name" ref={createNameRef} placeholder="Room Name" />
           <button type="submit">Create Room</button>

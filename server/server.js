@@ -25,6 +25,11 @@ function getRandomWords(count = 3) {
   return [...words].sort(() => 0.5 - Math.random()).slice(0, count);
 }
 
+// new map to store player names by socket id for quick lookup
+// generate token and store in map on join/create, timer on disconnect to clear after some time in case of reconnect, remove on reconnect as well
+
+const playersByToken = new Map();
+
 function serializeRoom(room) {
   return {
     adminId: room.adminId,
@@ -187,7 +192,7 @@ function handleCreateRoom(socket, name, playerName) {
   const room = rooms.get(roomId);
   socket.join(roomId);
   socket.emit("room created", roomId);
-  room.players.push({ id: socket.id, name: playerName });
+  room.players.push({ id: socket.id, name: playerName, score: 0 });
   room.toBePlayed.push(socket.id);
   io.to(roomId).emit("msg", `room ${room.name} created id: ${roomId}`);
   io.to(roomId).emit("room sent", serializeRoom(room));
@@ -212,7 +217,7 @@ function handleJoinRoom(socket, roomId, playerName) {
   console.log(`${socket.id} joined ${room.name} ${roomId}`);
   socket.join(roomId);
   socket.emit("room joined", roomId);
-  room.players.push({ id: socket.id, name: playerName });
+  room.players.push({ id: socket.id, name: playerName, score: 0 });
   room.toBePlayed.push(socket.id);
   io.to(roomId).emit("room sent", serializeRoom(room));
 }
@@ -276,11 +281,16 @@ function handleSendMessage(socket, msg, roomId) {
 
     io.to(roomId).emit("correct answer", { id: socket.id });
     const guesser = room.players.find((player) => player.id === socket.id);
+    if (guesser) {
+      guesser.score += 1;
+    }
     const guessName = guesser?.name ?? socket.id;
     const guessMsg = { id: "system", text: `${guessName} guessed the word!` };
     room.guessedCurrentWord.push(socket.id);
     room.messages.push(guessMsg);
+    io.to(roomId).emit("room sent", serializeRoom(room));
     io.to(roomId).emit("new message", guessMsg);
+
     maybeAdvanceIfAllGuessed(roomId);
 
     return;

@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import ChatBox from "./ChatBox";
 import socket, {
   reqRoomData,
+  reqJoinRoom,
   startGame,
   nextTurn,
   reqChooseWord,
@@ -23,12 +24,15 @@ export default function Room() {
   const [wordChoices, setWordChoices] = useState([]);
   const [hasChosenWord, setHasChosenWord] = useState(false);
   const [pickEndsAt, setPickEndsAt] = useState(null);
+  const [currentWord, setCurrentWord] = useState(null);
   const [roundEndsAt, setRoundEndsAt] = useState(null);
   const [intermissionEndsAt, setIntermissionEndsAt] = useState(null);
   const [intermissionNextDrawerId, setIntermissionNextDrawerId] =
     useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [errorMsg, setErrorMsg] = useState("");
+  const [pendingName, setPendingName] = useState("");
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const renderCountRef = useRef(0);
   const prevRenderStateRef = useRef({ roomId: undefined, room: undefined });
 
@@ -77,11 +81,20 @@ export default function Room() {
       setMessages(nextRoom.messages ?? []);
       setDrawingData(nextRoom.drawingData ?? []);
       setPlayers(nextRoom.players ?? []);
+      const isInRoom = (nextRoom.players ?? []).some((p) => p.id === socket.id);
+      if (!isInRoom) {
+        setShowNamePrompt(true);
+      }
       setCurrentDrawerId(nextRoom.currentDrawerId ?? null);
       setAdminId(nextRoom.adminId ?? null);
       setGameStarted(nextRoom.started ?? false);
       setWordChoices(nextRoom.wordChoices ?? []);
-      setHasChosenWord(Boolean(nextRoom.word));
+      if (nextRoom.word) {
+        setCurrentWord(nextRoom.word);
+        setHasChosenWord(true);
+      } else {
+        setHasChosenWord(false);
+      }
       setPickEndsAt(nextRoom.pickDeadline ?? null);
       setRoundEndsAt(nextRoom.roundDeadline ?? null);
       setIntermissionEndsAt(null);
@@ -207,16 +220,47 @@ export default function Room() {
         } turn next (${intermissionSecondsLeft}s)`
       : "";
 
+  function handleNameSubmit(e) {
+    e.preventDefault();
+    const name =
+      pendingName.trim() ||
+      "Player" +
+        Math.floor(Math.random() * 1000)
+          .toString()
+          .padStart(3, "0");
+    reqJoinRoom(roomId, name);
+    setShowNamePrompt(false);
+  }
+
   function handleWordChoose(word) {
     reqChooseWord(roomId, word);
     setWordChoices([]);
     setHasChosenWord(true);
+    setCurrentWord(word);
   }
 
   function renderPlayers(players) {
     return players.map((player) => (
       <PlayerCard player={player} key={player.id} pfp={pfp} />
     ));
+  }
+
+  if (showNamePrompt) {
+    return (
+      <div className="room-layout">
+        <form onSubmit={handleNameSubmit} style={{ margin: "2rem" }}>
+          <p>Enter your name to join "{room?.name ?? roomId}":</p>
+          <input
+            type="text"
+            placeholder="Your name"
+            value={pendingName}
+            onChange={(e) => setPendingName(e.target.value)}
+            autoFocus
+          />
+          <button type="submit">Join</button>
+        </form>
+      </div>
+    );
   }
 
   return (
@@ -230,6 +274,9 @@ export default function Room() {
       </div>
 
       <div className="canvas-display">
+        {currentDrawerId === socket.id && hasChosenWord && (
+          <p>Your word: {currentWord}</p>
+        )}
         <Canvas
           roomId={roomId}
           drawingData={drawingData}
