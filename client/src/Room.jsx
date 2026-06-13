@@ -14,6 +14,9 @@ import pfp from "./assets/pfp.webp";
 
 export default function Room() {
   const { roomId } = useParams();
+  const [clientPlayerId, setClientPlayerId] = useState(() =>
+    localStorage.getItem("playerToken"),
+  );
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [drawingData, setDrawingData] = useState([]);
@@ -76,12 +79,26 @@ export default function Room() {
   });
 
   useEffect(() => {
+    function onStoreToken(token) {
+      setClientPlayerId(token);
+    }
+
+    socket.on("store token", onStoreToken);
+
+    return () => {
+      socket.off("store token", onStoreToken);
+    };
+  }, []);
+
+  useEffect(() => {
     function onRoomSent(nextRoom) {
       setRoom(nextRoom);
       setMessages(nextRoom.messages ?? []);
       setDrawingData(nextRoom.drawingData ?? []);
       setPlayers(nextRoom.players ?? []);
-      const isInRoom = (nextRoom.players ?? []).some((p) => p.id === socket.id);
+      const isInRoom = (nextRoom.players ?? []).some(
+        (p) => p.id === clientPlayerId,
+      );
       if (!isInRoom) {
         setShowNamePrompt(true);
       }
@@ -192,7 +209,7 @@ export default function Room() {
     socket.on("word auto selected", onWordAutoSelected);
     socket.on("intermission started", onIntermissionStarted);
     socket.on("error msg", onErrorMessage);
-    reqRoomData(roomId);
+    reqRoomData(roomId, clientPlayerId || undefined);
 
     return () => {
       socket.off("room sent", onRoomSent);
@@ -210,7 +227,7 @@ export default function Room() {
       socket.off("intermission started", onIntermissionStarted);
       socket.off("error msg", onErrorMessage);
     };
-  }, [roomId]);
+  }, [roomId, clientPlayerId]);
 
   const intermissionText =
     intermissionSecondsLeft > 0 && intermissionNextDrawerId
@@ -228,7 +245,7 @@ export default function Room() {
         Math.floor(Math.random() * 1000)
           .toString()
           .padStart(3, "0");
-    reqJoinRoom(roomId, name);
+    reqJoinRoom(roomId, name, clientPlayerId || undefined);
     setShowNamePrompt(false);
   }
 
@@ -274,13 +291,13 @@ export default function Room() {
       </div>
 
       <div className="canvas-display">
-        {currentDrawerId === socket.id && hasChosenWord && (
+        {currentDrawerId === clientPlayerId && hasChosenWord && (
           <p>Your word: {currentWord}</p>
         )}
         <Canvas
           roomId={roomId}
           drawingData={drawingData}
-          canDraw={currentDrawerId === socket.id && hasChosenWord}
+          canDraw={currentDrawerId === clientPlayerId && hasChosenWord}
           overlayText={intermissionText}
         />
       </div>
@@ -290,8 +307,8 @@ export default function Room() {
       </div>
       <div className="room-controls">
         {errorMsg && <p>{errorMsg}</p>}
-        {currentDrawerId === socket.id && <p>YOUR TURN</p>}
-        {adminId === socket.id && !gameStarted && (
+        {currentDrawerId === clientPlayerId && <p>YOUR TURN</p>}
+        {adminId === clientPlayerId && !gameStarted && (
           <button
             onClick={() => startGame(roomId)}
             disabled={players.length < 2}
@@ -300,10 +317,10 @@ export default function Room() {
             Start
           </button>
         )}
-        {adminId === socket.id && !gameStarted && players.length < 2 && (
+        {adminId === clientPlayerId && !gameStarted && players.length < 2 && (
           <p>Need at least 2 players to start.</p>
         )}
-        {currentDrawerId === socket.id && wordChoices.length > 0 && (
+        {currentDrawerId === clientPlayerId && wordChoices.length > 0 && (
           <div className="choose-word">
             <p>Choose a word:</p>
             <p>Time left: {pickSecondsLeft}s</p>
@@ -314,11 +331,11 @@ export default function Room() {
             ))}
           </div>
         )}
-        {currentDrawerId === socket.id && hasChosenWord && (
+        {currentDrawerId === clientPlayerId && hasChosenWord && (
           <p>Word selected. Start drawing!</p>
         )}
         {roundSecondsLeft > 0 && <p>Round time left: {roundSecondsLeft}s</p>}
-        {currentDrawerId === socket.id && (
+        {currentDrawerId === clientPlayerId && (
           <button onClick={() => nextTurn(roomId)}>End Turn</button>
         )}
       </div>

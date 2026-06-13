@@ -18,6 +18,15 @@ socket.on("error msg", (message) => {
   console.log(`ERROR: ${message}`);
 });
 
+socket.on("store token", (token) => {
+  localStorage.setItem("playerToken", token);
+});
+
+// socket.on("check cookie", () => {
+//   const token = localStorage.getItem("playerToken");
+//   socket.emit("cookie sent", token);
+// });
+
 export function reqRoomsList(roomId) {
   socket.emit("request rooms list", roomId);
 }
@@ -46,19 +55,19 @@ export function reqUndoStroke(roomId) {
   socket.emit("undo stroke", roomId);
 }
 
-export function reqRoomData(roomId) {
-  socket.emit("request room data", roomId);
+export function reqRoomData(roomId, token) {
+  socket.emit("request room data", roomId, token);
 }
 
 export function reqSendMessage(msg, roomId) {
   socket.emit("send message", msg, roomId);
   console.log(`${msg} ${socket.id}`);
 }
-export function reqJoinRoom(roomId, playerName) {
-  socket.emit("join room", roomId, playerName);
+export function reqJoinRoom(roomId, playerName, token) {
+  socket.emit("join room", roomId, playerName, token);
 }
-export function reqCreateRoom(name, playerName) {
-  socket.emit("create room", name, playerName);
+export function reqCreateRoom(name, playerName, token) {
+  socket.emit("create room", name, playerName, token);
 }
 
 export default socket;

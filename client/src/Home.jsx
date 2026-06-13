@@ -72,11 +72,18 @@ export default function Home() {
       createNameRef.current.value = "Room " + Math.floor(Math.random() * 1000);
     }
     e.preventDefault();
-    reqCreateRoom(createNameRef.current.value, joinNameRef.current?.value);
+    const token = localStorage.getItem("playerToken");
+    reqCreateRoom(
+      createNameRef.current.value,
+      joinNameRef.current?.value,
+      token || undefined,
+    );
   }
 
   function handleJoin(e) {
     e.preventDefault();
+
+    const token = localStorage.getItem("playerToken");
 
     if (!joinIdRef.current.value.trim()) {
       submitError(joinIdRef, "Room ID is required");
@@ -87,7 +94,11 @@ export default function Home() {
       joinNameRef.current.value = defaultPlayerName;
     }
 
-    reqJoinRoom(joinIdRef.current.value, joinNameRef.current?.value);
+    reqJoinRoom(
+      joinIdRef.current.value,
+      joinNameRef.current?.value,
+      token || undefined,
+    );
   }
 
   return (

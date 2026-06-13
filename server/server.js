@@ -15,9 +15,11 @@ const rooms = new Map();
 const pickTimers = new Map();
 const roundTimers = new Map();
 const intermissionTimers = new Map();
+const disconnectTimers = new Map();
 const WORD_PICK_TIME_MS = 10_000;
 const ROUND_TIME_MS = 10_000;
 const ALL_GUESSED_INTERMISSION_MS = 5_000;
+const DISCONNECT_GRACE_MS = 10_000;
 
 const words = ["fish", "stone", "rock", "paper", "scissor"];
 
@@ -25,10 +27,94 @@ function getRandomWords(count = 3) {
   return [...words].sort(() => 0.5 - Math.random()).slice(0, count);
 }
 
-// new map to store player names by socket id for quick lookup
-// generate token and store in map on join/create, timer on disconnect to clear after some time in case of reconnect, remove on reconnect as well
+const playerSessions = new Map();
 
-const playersByToken = new Map();
+function getPlayerBySocketId(room, socketId) {
+  if (!room) return null;
+  return room.players.find((player) => player.socketId === socketId) ?? null;
+}
+
+function getPlayerById(room, playerId) {
+  if (!room) return null;
+  return room.players.find((player) => player.id === playerId) ?? null;
+}
+
+function clearDisconnectTimer(playerId) {
+  const timer = disconnectTimers.get(playerId);
+  if (!timer) {
+    return;
+  }
+
+  clearTimeout(timer);
+  disconnectTimers.delete(playerId);
+}
+
+function resolvePlayerIdFromToken(token) {
+  if (typeof token !== "string" || token.trim().length === 0) {
+    return nanoid();
+  }
+
+  const normalized = token.trim();
+  if (playerSessions.has(normalized)) {
+    return normalized;
+  }
+
+  return nanoid();
+}
+
+function removePlayerFromRoom(roomId, playerId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    return;
+  }
+
+  const player = getPlayerById(room, playerId);
+  if (!player) {
+    return;
+  }
+
+  const wasCurrentDrawer = room.currentDrawerId === playerId;
+  const wasAdmin = room.adminId === playerId;
+
+  room.players = room.players.filter(
+    (existingPlayer) => existingPlayer.id !== playerId,
+  );
+  room.toBePlayed = room.toBePlayed.filter((pid) => pid !== playerId);
+  room.alreadyPlayed = room.alreadyPlayed.filter((pid) => pid !== playerId);
+  room.guessedCurrentWord = room.guessedCurrentWord.filter(
+    (pid) => pid !== playerId,
+  );
+  playerSessions.delete(playerId);
+
+  if (room.players.length === 0) {
+    clearRoomTimers(roomId);
+    rooms.delete(roomId);
+    console.log(`room ${roomId} deleted (empty)`);
+    return;
+  }
+
+  if (wasAdmin && room.players.length > 0) {
+    room.adminId = room.players[0].id;
+    console.log(`admin ${playerId} left, new admin: ${room.adminId}`);
+  }
+
+  if (wasCurrentDrawer) {
+    clearRoomTimers(roomId);
+    room.word = null;
+    room.wordChoices = null;
+    room.currentDrawerId = null;
+    if (room.started && room.players.length >= 2) {
+      handleNextTurn(roomId);
+      return;
+    } else if (room.started && room.players.length < 2) {
+      room.started = false;
+    }
+  } else {
+    maybeAdvanceIfAllGuessed(roomId);
+  }
+
+  io.to(roomId).emit("room sent", serializeRoom(room));
+}
 
 function serializeRoom(room) {
   return {
@@ -166,14 +252,14 @@ function startPickTimer(roomId, wordChoices) {
   pickTimers.set(roomId, pickTimer);
 }
 
-function handleCreateRoom(socket, name, playerName) {
+function handleCreateRoom(socket, name, playerName, token) {
   let roomId = nanoid(6);
   while (rooms.has(roomId)) {
     roomId = nanoid(6);
   }
 
   rooms.set(roomId, {
-    adminId: socket.id,
+    adminId: null,
     started: false,
     name: name,
     players: [],
@@ -192,21 +278,50 @@ function handleCreateRoom(socket, name, playerName) {
   const room = rooms.get(roomId);
   socket.join(roomId);
   socket.emit("room created", roomId);
-  room.players.push({ id: socket.id, name: playerName, score: 0 });
-  room.toBePlayed.push(socket.id);
+  const playerId = resolvePlayerIdFromToken(token);
+  const player = {
+    id: playerId,
+    socketId: socket.id,
+    name: playerName,
+    score: 0,
+    connected: true,
+    roomId: roomId,
+  };
+  room.players.push(player);
+  room.adminId = player.id;
+  room.toBePlayed.push(player.id);
+  playerSessions.set(player.id, {
+    playerId: player.id,
+    roomId,
+  });
+  socket.emit("store token", player.id);
   io.to(roomId).emit("msg", `room ${room.name} created id: ${roomId}`);
   io.to(roomId).emit("room sent", serializeRoom(room));
   console.log(`${roomId}`);
 }
 
-function handleJoinRoom(socket, roomId, playerName) {
+function handleJoinRoom(socket, roomId, playerName, token) {
   const room = rooms.get(roomId);
+
   if (!room) {
     socket.emit("error msg", "Room does not exist");
     return;
   }
+  const providedToken =
+    typeof token === "string" && token.trim().length > 0 ? token.trim() : null;
+  const foundPlayer = providedToken ? getPlayerById(room, providedToken) : null;
 
-  if (room.players.some((player) => player.id === socket.id)) {
+  if (room.players.some((player) => player.socketId === socket.id)) {
+    socket.join(roomId);
+    socket.emit("room joined", roomId);
+    socket.emit("room sent", serializeRoom(room));
+    return;
+  }
+
+  if (foundPlayer) {
+    clearDisconnectTimer(foundPlayer.id);
+    foundPlayer.socketId = socket.id;
+    foundPlayer.connected = true;
     socket.join(roomId);
     socket.emit("room joined", roomId);
     socket.emit("room sent", serializeRoom(room));
@@ -217,8 +332,22 @@ function handleJoinRoom(socket, roomId, playerName) {
   console.log(`${socket.id} joined ${room.name} ${roomId}`);
   socket.join(roomId);
   socket.emit("room joined", roomId);
-  room.players.push({ id: socket.id, name: playerName, score: 0 });
-  room.toBePlayed.push(socket.id);
+  const playerId = resolvePlayerIdFromToken(providedToken);
+  const player = {
+    id: playerId,
+    socketId: socket.id,
+    name: playerName,
+    score: 0,
+    connected: true,
+    roomId: roomId,
+  };
+  room.players.push(player);
+  playerSessions.set(player.id, {
+    playerId: player.id,
+    roomId,
+  });
+  socket.emit("store token", player.id);
+  room.toBePlayed.push(player.id);
   io.to(roomId).emit("room sent", serializeRoom(room));
 }
 
@@ -245,6 +374,12 @@ function handleSendMessage(socket, msg, roomId) {
     socket.emit("error msg", "Room does not exist");
     return;
   }
+  const sender = getPlayerBySocketId(room, socket.id);
+  if (!sender) {
+    socket.emit("error msg", "Join the room before sending messages");
+    return;
+  }
+
   function checkAnswer(roomWord, msg) {
     if (!roomWord) return false;
     const word = roomWord.trim().toLowerCase();
@@ -271,22 +406,22 @@ function handleSendMessage(socket, msg, roomId) {
   }
 
   if (checkAnswer(room.word, msg)) {
-    if (socket.id === room.currentDrawerId) {
+    if (sender.id === room.currentDrawerId) {
       return;
     }
 
-    if (room.guessedCurrentWord.includes(socket.id)) {
+    if (room.guessedCurrentWord.includes(sender.id)) {
       return;
     }
 
-    io.to(roomId).emit("correct answer", { id: socket.id });
-    const guesser = room.players.find((player) => player.id === socket.id);
+    io.to(roomId).emit("correct answer", { id: sender.id });
+    const guesser = room.players.find((player) => player.id === sender.id);
     if (guesser) {
       guesser.score += 1;
     }
-    const guessName = guesser?.name ?? socket.id;
+    const guessName = guesser?.name ?? sender.id;
     const guessMsg = { id: "system", text: `${guessName} guessed the word!` };
-    room.guessedCurrentWord.push(socket.id);
+    room.guessedCurrentWord.push(sender.id);
     room.messages.push(guessMsg);
     io.to(roomId).emit("room sent", serializeRoom(room));
     io.to(roomId).emit("new message", guessMsg);
@@ -302,7 +437,7 @@ function handleSendMessage(socket, msg, roomId) {
     return;
   }
 
-  const newMessage = { id: socket.id, text: msg };
+  const newMessage = { id: sender.id, name: sender.name, text: msg };
   room.messages.push(newMessage);
   io.to(roomId).emit("new message", newMessage);
 }
@@ -405,11 +540,22 @@ function getNextDrawerId(room) {
   return toBePlayed[0];
 }
 
-function handleRoomData(socket, roomId) {
+function handleRoomData(socket, roomId, token) {
   const room = rooms.get(roomId);
   if (!room) {
     socket.emit("error msg", "Room does not exist");
     return;
+  }
+
+  const providedToken =
+    typeof token === "string" && token.trim().length > 0 ? token.trim() : null;
+  if (providedToken) {
+    const foundPlayer = getPlayerById(room, providedToken);
+    if (foundPlayer) {
+      clearDisconnectTimer(foundPlayer.id);
+      foundPlayer.socketId = socket.id;
+      foundPlayer.connected = true;
+    }
   }
 
   socket.join(roomId);
@@ -423,7 +569,13 @@ function handleDrawStroke(socket, stroke, roomId) {
     return;
   }
 
-  if (room.currentDrawerId !== socket.id) {
+  const drawer = getPlayerBySocketId(room, socket.id);
+  if (!drawer) {
+    socket.emit("error msg", "Join the room before drawing");
+    return;
+  }
+
+  if (room.currentDrawerId !== drawer.id) {
     socket.emit("error msg", "Only current drawer can draw");
     return;
   }
@@ -437,6 +589,7 @@ function handleDrawStroke(socket, stroke, roomId) {
     lineWidth: Number(stroke.lineWidth),
     strokeId: stroke.strokeId,
     tool: stroke.tool === "erase" ? "erase" : "draw",
+    playerId: drawer.id,
     socketId: socket.id,
   };
 
@@ -451,7 +604,13 @@ function handleUndoStroke(socket, roomId) {
     return;
   }
 
-  if (room.currentDrawerId !== socket.id) {
+  const drawer = getPlayerBySocketId(room, socket.id);
+  if (!drawer) {
+    socket.emit("error msg", "Join the room before undo");
+    return;
+  }
+
+  if (room.currentDrawerId !== drawer.id) {
     socket.emit("error msg", "Only current drawer can undo");
     return;
   }
@@ -463,7 +622,7 @@ function handleUndoStroke(socket, roomId) {
   const lastStroke = room.drawingData[room.drawingData.length - 1];
   const lastStrokeId = lastStroke.strokeId;
 
-  if (lastStroke.socketId !== socket.id) {
+  if (lastStroke.playerId !== drawer.id) {
     return;
   }
 
@@ -486,7 +645,13 @@ function handleClearDrawing(socket, roomId) {
     return;
   }
 
-  if (room.currentDrawerId !== socket.id) {
+  const drawer = getPlayerBySocketId(room, socket.id);
+  if (!drawer) {
+    socket.emit("error msg", "Join the room before clearing");
+    return;
+  }
+
+  if (room.currentDrawerId !== drawer.id) {
     socket.emit("error msg", "Only current drawer can clear canvas");
     return;
   }
@@ -564,7 +729,10 @@ function handleNextTurn(roomId) {
   io.to(roomId).emit("drawer changed", {
     drawerId: currentDrawer,
   });
-  io.to(currentDrawer).emit("choose a word", random3);
+  const currentDrawerPlayer = getPlayerById(room, currentDrawer);
+  if (currentDrawerPlayer?.socketId) {
+    io.to(currentDrawerPlayer.socketId).emit("choose a word", random3);
+  }
   console.log(
     "current drawer:",
     currentDrawer,
@@ -582,7 +750,13 @@ function handleWordChosen(socket, roomId, chosenWord) {
     return;
   }
 
-  if (room.currentDrawerId !== socket.id) {
+  const drawer = getPlayerBySocketId(room, socket.id);
+  if (!drawer) {
+    socket.emit("error msg", "Join the room before choosing a word");
+    return;
+  }
+
+  if (room.currentDrawerId !== drawer.id) {
     socket.emit("error msg", "Only current drawer can choose a word");
     return;
   }
@@ -633,17 +807,17 @@ function handleWordChosen(socket, roomId, chosenWord) {
 io.on("connection", (socket) => {
   console.log("a user connected:", socket.id);
 
-  socket.on("create room", (name, playerName) => {
-    handleCreateRoom(socket, name, playerName);
+  socket.on("create room", (name, playerName, token) => {
+    handleCreateRoom(socket, name, playerName, token);
   });
-  socket.on("join room", (roomId, playerName) => {
-    handleJoinRoom(socket, roomId, playerName);
+  socket.on("join room", (roomId, playerName, token) => {
+    handleJoinRoom(socket, roomId, playerName, token);
   });
   socket.on("send message", (msg, roomId) => {
     handleSendMessage(socket, msg, roomId);
   });
-  socket.on("request room data", (roomId) => {
-    handleRoomData(socket, roomId);
+  socket.on("request room data", (roomId, token) => {
+    handleRoomData(socket, roomId, token);
   });
   socket.on("draw stroke", (stroke, roomId) => {
     handleDrawStroke(socket, stroke, roomId);
@@ -672,7 +846,13 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (room.currentDrawerId !== socket.id) {
+    const drawer = getPlayerBySocketId(room, socket.id);
+    if (!drawer) {
+      socket.emit("error msg", "Join the room before ending turn");
+      return;
+    }
+
+    if (room.currentDrawerId !== drawer.id) {
       socket.emit("error msg", "Only current drawer can end turn");
       return;
     }
@@ -685,46 +865,19 @@ io.on("connection", (socket) => {
   socket.on("disconnect", (reason) => {
     console.log(`${socket.id} disconnected: ${reason}`);
     rooms.forEach((room, roomId) => {
-      const wasCurrentDrawer = room.currentDrawerId === socket.id;
-      const wasAdmin = room.adminId === socket.id;
-
-      room.players = room.players.filter((player) => player.id !== socket.id);
-      room.toBePlayed = room.toBePlayed.filter((pid) => pid !== socket.id);
-      room.alreadyPlayed = room.alreadyPlayed.filter(
-        (pid) => pid !== socket.id,
-      );
-      room.guessedCurrentWord = room.guessedCurrentWord.filter(
-        (pid) => pid !== socket.id,
-      );
-
-      if (room.players.length === 0) {
-        clearRoomTimers(roomId);
-        rooms.delete(roomId);
-        console.log(`room ${roomId} deleted (empty)`);
+      const disconnectedPlayer = getPlayerBySocketId(room, socket.id);
+      if (!disconnectedPlayer) {
         return;
       }
 
-      // Pass admin privileges to another player if admin left
-      if (wasAdmin && room.players.length > 0) {
-        room.adminId = room.players[0].id;
-        console.log(`admin ${socket.id} left, new admin: ${room.adminId}`);
-      }
-
-      if (wasCurrentDrawer) {
-        clearRoomTimers(roomId);
-        room.word = null;
-        room.wordChoices = null;
-        room.currentDrawerId = null;
-        if (room.started && room.players.length >= 2) {
-          handleNextTurn(roomId);
-          return;
-        } else if (room.started && room.players.length < 2) {
-          room.started = false;
-        }
-      } else {
-        maybeAdvanceIfAllGuessed(roomId);
-      }
-
+      disconnectedPlayer.socketId = null;
+      disconnectedPlayer.connected = false;
+      clearDisconnectTimer(disconnectedPlayer.id);
+      const removeTimer = setTimeout(() => {
+        disconnectTimers.delete(disconnectedPlayer.id);
+        removePlayerFromRoom(roomId, disconnectedPlayer.id);
+      }, DISCONNECT_GRACE_MS);
+      disconnectTimers.set(disconnectedPlayer.id, removeTimer);
       io.to(roomId).emit("room sent", serializeRoom(room));
     });
   });
