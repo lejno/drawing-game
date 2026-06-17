@@ -311,6 +311,16 @@ function handleJoinRoom(socket, roomId, playerName, token) {
     typeof token === "string" && token.trim().length > 0 ? token.trim() : null;
   const foundPlayer = providedToken ? getPlayerById(room, providedToken) : null;
 
+  if (
+    foundPlayer &&
+    foundPlayer.connected &&
+    foundPlayer.socketId &&
+    foundPlayer.socketId !== socket.id
+  ) {
+    socket.emit("error msg", "This player is already connected to the room");
+    return;
+  }
+
   if (room.players.some((player) => player.socketId === socket.id)) {
     socket.join(roomId);
     socket.emit("room joined", roomId);
@@ -552,6 +562,18 @@ function handleRoomData(socket, roomId, token) {
   if (providedToken) {
     const foundPlayer = getPlayerById(room, providedToken);
     if (foundPlayer) {
+      if (
+        foundPlayer.connected &&
+        foundPlayer.socketId &&
+        foundPlayer.socketId !== socket.id
+      ) {
+        socket.emit(
+          "error msg",
+          "This player is already connected to the room",
+        );
+        return;
+      }
+
       clearDisconnectTimer(foundPlayer.id);
       foundPlayer.socketId = socket.id;
       foundPlayer.connected = true;

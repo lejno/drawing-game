@@ -99,9 +99,7 @@ export default function Room() {
       const isInRoom = (nextRoom.players ?? []).some(
         (p) => p.id === clientPlayerId,
       );
-      if (!isInRoom) {
-        setShowNamePrompt(true);
-      }
+      setShowNamePrompt(!isInRoom);
       setCurrentDrawerId(nextRoom.currentDrawerId ?? null);
       setAdminId(nextRoom.adminId ?? null);
       setGameStarted(nextRoom.started ?? false);
