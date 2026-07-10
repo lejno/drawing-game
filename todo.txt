@@ -1,5 +1,5 @@
 timer
-
+ opt - send only changed info
 not picking a word? auto word/skip
 afk drawer
 intermission between turns showing next player

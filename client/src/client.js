@@ -66,8 +66,8 @@ export function reqSendMessage(msg, roomId) {
 export function reqJoinRoom(roomId, playerName, token) {
   socket.emit("join room", roomId, playerName, token);
 }
-export function reqCreateRoom(name, playerName, token) {
-  socket.emit("create room", name, playerName, token);
+export function reqCreateRoom(name, playerName, token, settings) {
+  socket.emit("create room", name, playerName, token, settings);
 }
 
 export default socket;

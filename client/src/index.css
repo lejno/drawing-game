@@ -140,7 +140,17 @@ body,
   align-items: center;
   gap: 12px;
 }
-.player-card img {
+
+.player-card-dc {
+  border: 1px solid grey;
+  font-size: 30px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: grey;
+}
+
+.player-card-img {
   width: 50px;
 }
 

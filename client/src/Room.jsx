@@ -96,8 +96,14 @@ export default function Room() {
       setMessages(nextRoom.messages ?? []);
       setDrawingData(nextRoom.drawingData ?? []);
       setPlayers(nextRoom.players ?? []);
+      const latestToken = localStorage.getItem("playerToken");
+      if (latestToken && latestToken !== clientPlayerId) {
+        setClientPlayerId(latestToken);
+      }
+
+      const effectivePlayerId = latestToken || clientPlayerId;
       const isInRoom = (nextRoom.players ?? []).some(
-        (p) => p.id === clientPlayerId,
+        (p) => p.id === effectivePlayerId || p.socketId === socket.id,
       );
       setShowNamePrompt(!isInRoom);
       setCurrentDrawerId(nextRoom.currentDrawerId ?? null);

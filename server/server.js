@@ -20,6 +20,11 @@ const WORD_PICK_TIME_MS = 10_000;
 const ROUND_TIME_MS = 10_000;
 const ALL_GUESSED_INTERMISSION_MS = 5_000;
 const DISCONNECT_GRACE_MS = 10_000;
+const DEFAULT_ROOM_SETTINGS = {
+  maxPlayers: 8,
+  maxRounds: 3,
+  timeLimit: 60,
+};
 
 const words = ["fish", "stone", "rock", "paper", "scissor"];
 
@@ -252,7 +257,24 @@ function startPickTimer(roomId, wordChoices) {
   pickTimers.set(roomId, pickTimer);
 }
 
-function handleCreateRoom(socket, name, playerName, token) {
+function handleCreateRoom(socket, name, playerName, token, settings) {
+  const safeSettings = {
+    maxPlayers:
+      Number.isFinite(settings?.maxPlayers) && settings.maxPlayers > 0
+        ? settings.maxPlayers
+        : DEFAULT_ROOM_SETTINGS.maxPlayers,
+    maxRounds:
+      Number.isFinite(settings?.maxRounds) && settings.maxRounds > 0
+        ? settings.maxRounds
+        : Number.isFinite(settings?.rounds) && settings.rounds > 0
+          ? settings.rounds
+          : DEFAULT_ROOM_SETTINGS.maxRounds,
+    timeLimit:
+      Number.isFinite(settings?.timeLimit) && settings.timeLimit > 0
+        ? settings.timeLimit
+        : DEFAULT_ROOM_SETTINGS.timeLimit,
+  };
+
   let roomId = nanoid(6);
   while (rooms.has(roomId)) {
     roomId = nanoid(6);
@@ -273,6 +295,9 @@ function handleCreateRoom(socket, name, playerName, token) {
     drawingData: [],
     pickDeadline: null,
     roundDeadline: null,
+    maxPlayers: safeSettings.maxPlayers,
+    maxRounds: safeSettings.maxRounds,
+    timeLimit: safeSettings.timeLimit,
   });
 
   const room = rooms.get(roomId);
@@ -829,8 +854,8 @@ function handleWordChosen(socket, roomId, chosenWord) {
 io.on("connection", (socket) => {
   console.log("a user connected:", socket.id);
 
-  socket.on("create room", (name, playerName, token) => {
-    handleCreateRoom(socket, name, playerName, token);
+  socket.on("create room", (name, playerName, token, settings) => {
+    handleCreateRoom(socket, name, playerName, token, settings);
   });
   socket.on("join room", (roomId, playerName, token) => {
     handleJoinRoom(socket, roomId, playerName, token);

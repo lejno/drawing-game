@@ -6,6 +6,16 @@ import { reqJoinRoom } from "./client";
 export default function BrowseRooms() {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
+
+  function randomName() {
+    return (
+      "Player" +
+      Math.floor(Math.random() * 1000)
+        .toString()
+        .padStart(3, "0")
+    ).slice(0, 10);
+  }
+
   useEffect(() => {
     socket.on("rooms list", (roomsList) => {
       setRooms(roomsList);
@@ -28,7 +38,8 @@ export default function BrowseRooms() {
 
   function handleJoin(e, roomId) {
     e.preventDefault();
-    reqJoinRoom(roomId);
+    const token = localStorage.getItem("playerToken") || undefined;
+    reqJoinRoom(roomId, randomName(), token);
   }
   return (
     <div className="main rooms-main">

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { reqCreateRoom, reqJoinRoom } from "./client";
+import { reqJoinRoom } from "./client";
 import socket from "./client";
 import { useNavigate } from "react-router-dom";
 
 export default function Home() {
-  const createNameRef = useRef();
   const joinIdRef = useRef();
   const navigate = useNavigate();
   const joinNameRef = useRef();
@@ -17,6 +16,9 @@ export default function Home() {
   // on end of turn => generate new word, distribute points
   function openBrowser() {
     navigate("/rooms");
+  }
+  function openCreateForm() {
+    navigate("/create-room");
   }
 
   function randomName() {
@@ -67,19 +69,6 @@ export default function Home() {
     );
   }
 
-  function handleCreate(e) {
-    if (!createNameRef.current.value) {
-      createNameRef.current.value = "Room " + Math.floor(Math.random() * 1000);
-    }
-    e.preventDefault();
-    const token = localStorage.getItem("playerToken");
-    reqCreateRoom(
-      createNameRef.current.value,
-      joinNameRef.current?.value,
-      token || undefined,
-    );
-  }
-
   function handleJoin(e) {
     e.preventDefault();
 
@@ -112,10 +101,6 @@ export default function Home() {
             ref={joinNameRef}
           />
         </div>
-        <form onSubmit={handleCreate}>
-          <input id="room-name" ref={createNameRef} placeholder="Room Name" />
-          <button type="submit">Create Room</button>
-        </form>
         <form onSubmit={handleJoin}>
           <input
             id="room-id"
@@ -124,6 +109,9 @@ export default function Home() {
             placeholder="Room ID"
           />
           <button type="submit">Join Room</button>
+          <button type="button" onClick={() => openCreateForm()}>
+            Create Room
+          </button>
           <button type="button" onClick={() => openBrowser()}>
             Browse Rooms
           </button>
