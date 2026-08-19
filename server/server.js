@@ -257,6 +257,29 @@ function startPickTimer(roomId, wordChoices) {
   pickTimers.set(roomId, pickTimer);
 }
 
+function createRoomState(name, safeSettings) {
+  return {
+    adminId: null,
+    started: false,
+    name,
+    players: [],
+    toBePlayed: [],
+    alreadyPlayed: [],
+    currentDrawerId: null,
+    guessedCurrentWord: [],
+    word: null,
+    wordChoices: null,
+    messages: [],
+    drawingData: [],
+    pickDeadline: null,
+    roundDeadline: null,
+    currentRound: 0,
+    maxPlayers: safeSettings.maxPlayers,
+    maxRounds: safeSettings.maxRounds,
+    timeLimit: safeSettings.timeLimit,
+  };
+}
+
 function handleCreateRoom(socket, name, playerName, token, settings) {
   const safeSettings = {
     maxPlayers:
@@ -280,25 +303,7 @@ function handleCreateRoom(socket, name, playerName, token, settings) {
     roomId = nanoid(6);
   }
 
-  rooms.set(roomId, {
-    adminId: null,
-    started: false,
-    name: name,
-    players: [],
-    toBePlayed: [],
-    alreadyPlayed: [],
-    currentDrawerId: null,
-    guessedCurrentWord: [],
-    word: null,
-    wordChoices: null,
-    messages: [],
-    drawingData: [],
-    pickDeadline: null,
-    roundDeadline: null,
-    maxPlayers: safeSettings.maxPlayers,
-    maxRounds: safeSettings.maxRounds,
-    timeLimit: safeSettings.timeLimit,
-  });
+  rooms.set(roomId, createRoomState(name, safeSettings));
 
   const room = rooms.get(roomId);
   socket.join(roomId);
@@ -327,6 +332,11 @@ function handleCreateRoom(socket, name, playerName, token, settings) {
 
 function handleJoinRoom(socket, roomId, playerName, token) {
   const room = rooms.get(roomId);
+
+  if (room && room.players.length >= room.maxPlayers) {
+    socket.emit("error msg", "Room is full");
+    return;
+  }
 
   if (!room) {
     socket.emit("error msg", "Room does not exist");
@@ -734,6 +744,15 @@ function handleNextTurn(roomId) {
 
   clearRoomTimers(roomId);
   clearDrawingForRoom(roomId);
+  room.currentRound += 1;
+
+  if (room.maxRounds > 0 && room.currentRound >= room.maxRounds) {
+    room.started = false;
+    room.currentDrawerId = null;
+    io.to(roomId).emit("drawer changed", { drawerId: null });
+    io.to(roomId).emit("game ended");
+    return;
+  }
 
   if (
     room.currentDrawerId &&
@@ -836,21 +855,6 @@ function handleWordChosen(socket, roomId, chosenWord) {
   startRoundTimer(roomId);
 }
 
-// function handleEndTurn(socket, roomId) {
-//   const room = rooms.get(roomId);
-//   if (!room) return;
-
-//   if (room.currentDrawerId !== socket.id) return;
-
-//   if (room.currentDrawerId) {
-//     room.alreadyPlayed.push(room.currentDrawerId);
-//     room.currentDrawerId = null;
-//     console.log("turn ended, moved to alreadyPlayed");
-//   }
-
-//   handleStartGame(roomId);
-// }
-
 io.on("connection", (socket) => {
   console.log("a user connected:", socket.id);
 
@@ -876,11 +880,13 @@ io.on("connection", (socket) => {
     handleUndoStroke(socket, roomId);
   });
   socket.on("request rooms list", () => {
-    const roomsList = Array.from(rooms.entries()).map(([id, room]) => ({
-      id,
-      name: room.name,
-      playerCount: room.players.length,
-    }));
+    const roomsList = Array.from(rooms.entries())
+      .filter(([id, room]) => room.players.length < room.maxPlayers)
+      .map(([id, room]) => ({
+        id,
+        name: room.name,
+        playerCount: room.players.length,
+      }));
     socket.emit("rooms list", roomsList);
   });
   socket.on("start game", (roomId) => {

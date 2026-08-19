@@ -10,6 +10,6 @@
 
 - [x] change reqCreateRoom() in server.js
 - [x] change handleCreateRoom() in server.js
-- [ ] Navigate wiring for createRoomPage.jsx
+- [ ] settings in server
 - [ ] handle max players on join: allow if players < 8, otherwise delist room from joinable when max is reached
 - [ ] token change needs testing + ui
