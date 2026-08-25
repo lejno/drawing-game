@@ -881,7 +881,7 @@ io.on("connection", (socket) => {
   });
   socket.on("request rooms list", () => {
     const roomsList = Array.from(rooms.entries())
-      .filter(([id, room]) => room.players.length < room.maxPlayers)
+      .filter(([, room]) => room.players.length < room.maxPlayers)
       .map(([id, room]) => ({
         id,
         name: room.name,

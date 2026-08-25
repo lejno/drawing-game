@@ -261,8 +261,16 @@ export default function Room() {
   }
 
   function renderPlayers(players) {
-    return players.map((player) => (
-      <PlayerCard player={player} key={player.id} pfp={pfp} />
+    const users = players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      score: player.score,
+      connected: player.connected,
+    }));
+    users.sort((a, b) => b.score - a.score);
+
+    return users.map((user) => (
+      <PlayerCard player={user} key={user.id} pfp={pfp} />
     ));
   }
 

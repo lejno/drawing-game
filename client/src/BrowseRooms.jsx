@@ -3,25 +3,24 @@ import socket from "./client";
 import { useNavigate } from "react-router-dom";
 import { reqJoinRoom } from "./client";
 
+function randomName() {
+  return (
+    "Player" +
+    Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0")
+  ).slice(0, 10);
+}
+
 export default function BrowseRooms() {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
-
-  function randomName() {
-    return (
-      "Player" +
-      Math.floor(Math.random() * 1000)
-        .toString()
-        .padStart(3, "0")
-    ).slice(0, 10);
-  }
 
   useEffect(() => {
     socket.on("rooms list", (roomsList) => {
       setRooms(roomsList);
     });
 
-    // Request the rooms list when the component mounts
     socket.emit("request rooms list");
   }, []);
   useEffect(() => {

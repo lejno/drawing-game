@@ -11,5 +11,7 @@
 - [x] change reqCreateRoom() in server.js
 - [x] change handleCreateRoom() in server.js
 - [ ] settings in server
+- [ ] sort chat by score? maybe toggle
+- [ ] game ended, show top three
 - [ ] handle max players on join: allow if players < 8, otherwise delist room from joinable when max is reached
 - [ ] token change needs testing + ui
