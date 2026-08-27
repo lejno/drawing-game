@@ -4,14 +4,14 @@
 - [x] next turn on everyone guessed the word
 - [ ] room settings
 - [ ] not picking a word? auto word/skip
-- [ ] handle afk drawer
+- [ ] handle afk drawer !!!!!
 
 ## room settings - number of players, topic, time...
 
 - [x] change reqCreateRoom() in server.js
 - [x] change handleCreateRoom() in server.js
-- [ ] settings in server
-- [ ] sort chat by score? maybe toggle
+- [x] settings in server
+- [x] sort chat by score? maybe toggle
 - [ ] game ended, show top three
 - [ ] handle max players on join: allow if players < 8, otherwise delist room from joinable when max is reached
 - [ ] token change needs testing + ui

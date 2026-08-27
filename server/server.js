@@ -15,10 +15,12 @@ const rooms = new Map();
 const pickTimers = new Map();
 const roundTimers = new Map();
 const intermissionTimers = new Map();
+const afkTimers = new Map();
 const disconnectTimers = new Map();
 const WORD_PICK_TIME_MS = 10_000;
 const ROUND_TIME_MS = 10_000;
 const ALL_GUESSED_INTERMISSION_MS = 5_000;
+const AFK_TIME_MS = 5_000;
 const DISCONNECT_GRACE_MS = 10_000;
 const DEFAULT_ROOM_SETTINGS = {
   maxPlayers: 8,
@@ -176,6 +178,45 @@ function clearRoomTimers(roomId) {
   clearPickTimer(roomId);
   clearRoundTimer(roomId);
   clearIntermissionTimer(roomId);
+  clearAfkTimer(roomId);
+}
+
+function clearAfkTimer(roomId) {
+  const afkTimer = afkTimers.get(roomId);
+  if (afkTimer) {
+    clearTimeout(afkTimer);
+    afkTimers.delete(roomId);
+  }
+}
+
+function startAfkTimer(roomId) {
+  const room = rooms.get(roomId);
+  if (!room || !room.currentDrawerId) {
+    return;
+  }
+
+  clearAfkTimer(roomId);
+
+  const afkTimer = setTimeout(() => {
+    afkTimers.delete(roomId);
+    const currentRoom = rooms.get(roomId);
+    if (!currentRoom || !currentRoom.word) {
+      return;
+    }
+
+    startIntermission(roomId, "afk");
+  }, AFK_TIME_MS);
+
+  afkTimers.set(roomId, afkTimer);
+}
+
+// restarts the countdown; called whenever the drawer sends any drawing activity
+function resetAfkTimer(roomId) {
+  if (!afkTimers.has(roomId)) {
+    return;
+  }
+
+  startAfkTimer(roomId);
 }
 
 function clearIntermissionTimer(roomId) {
@@ -652,6 +693,7 @@ function handleDrawStroke(socket, stroke, roomId) {
 
   room.drawingData.push(nextStroke);
   io.to(roomId).emit("draw stroke", nextStroke);
+  resetAfkTimer(roomId);
 }
 
 function handleUndoStroke(socket, roomId) {
@@ -688,11 +730,13 @@ function handleUndoStroke(socket, roomId) {
       (stroke) => stroke.strokeId !== lastStrokeId,
     );
     io.to(roomId).emit("stroke undone", { strokeId: lastStrokeId });
+    resetAfkTimer(roomId);
     return;
   }
 
   room.drawingData.pop();
   io.to(roomId).emit("stroke undone", { strokeId: null });
+  resetAfkTimer(roomId);
 }
 
 function handleClearDrawing(socket, roomId) {
@@ -715,6 +759,7 @@ function handleClearDrawing(socket, roomId) {
 
   room.drawingData = [];
   io.to(roomId).emit("drawing cleared");
+  resetAfkTimer(roomId);
 }
 
 function handleStartGame(roomId) {
@@ -853,6 +898,7 @@ function handleWordChosen(socket, roomId, chosenWord) {
   console.log(`[word chosen] room: ${roomId} | word: ${normalizedWord}`);
   io.to(roomId).emit("word selected");
   startRoundTimer(roomId);
+  startAfkTimer(roomId);
 }
 
 io.on("connection", (socket) => {
