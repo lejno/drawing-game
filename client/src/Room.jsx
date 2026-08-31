@@ -15,7 +15,7 @@ import pfp from "./assets/pfp.webp";
 export default function Room() {
   const { roomId } = useParams();
   const [clientPlayerId, setClientPlayerId] = useState(() =>
-    localStorage.getItem("playerToken"),
+    localStorage.getItem("guestToken"),
   );
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -96,7 +96,7 @@ export default function Room() {
       setMessages(nextRoom.messages ?? []);
       setDrawingData(nextRoom.drawingData ?? []);
       setPlayers(nextRoom.players ?? []);
-      const latestToken = localStorage.getItem("playerToken");
+      const latestToken = localStorage.getItem("guestToken");
       if (latestToken && latestToken !== clientPlayerId) {
         setClientPlayerId(latestToken);
       }
@@ -344,7 +344,7 @@ export default function Room() {
           </div>
         )}
         {currentDrawerId === clientPlayerId && hasChosenWord && (
-          <p>Word selected. Start drawing!</p>
+          <p>Word selected</p>
         )}
         {roundSecondsLeft > 0 && <p>Round time left: {roundSecondsLeft}s</p>}
         {currentDrawerId === clientPlayerId && (

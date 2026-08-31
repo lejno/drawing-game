@@ -1,8 +1,10 @@
 const express = require("express");
+const cors = require("cors");
 const app = express();
 const http = require("http");
 const server = http.createServer(app);
 const { Server } = require("socket.io");
+const registerController = require("./controllers/registerController");
 const io = new Server(server, {
   cors: {
     origin: ["http://localhost:5173", "http://localhost:3000"],
@@ -27,7 +29,24 @@ const DEFAULT_ROOM_SETTINGS = {
   maxRounds: 3,
   timeLimit: 60,
 };
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:3000"],
+    credentials: true,
+  }),
+);
 
+app.use(express.json());
+app.post("/api/register", registerController.register_post);
+
+// MongoDB connection setup
+const mongoose = require("mongoose");
+require("dotenv").config();
+
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 const words = ["fish", "stone", "rock", "paper", "scissor"];
 
 function getRandomWords(count = 3) {
@@ -142,6 +161,14 @@ function serializeRoom(room) {
   };
 }
 
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:3000"],
+    credentials: true,
+  }),
+);
+app.use(express.json());
+app.post("/api/register", registerController.register_post);
 app.use(express.static(path.join(__dirname, "client/dist")));
 
 function clearPickTimer(roomId) {
