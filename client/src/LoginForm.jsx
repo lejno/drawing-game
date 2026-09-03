@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "./AuthContext";
 
-export default function RegisterForm() {
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+export default function LoginForm() {
+  const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +20,7 @@ export default function RegisterForm() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:3000/api/register", {
+      const response = await fetch("http://localhost:3000/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -32,14 +32,13 @@ export default function RegisterForm() {
 
       if (!response.ok) {
         const firstError =
-          data?.errors?.[0]?.msg || data?.message || "Registration failed.";
+          data?.errors?.[0]?.msg || data?.message || "Login failed.";
         throw new Error(firstError);
       }
 
-      setSuccess("Registration successful!");
       login(data.token);
-      setForm({ name: "", email: "", password: "" });
-      console.log("registered user:", data);
+      setSuccess("Login successful!");
+      setForm({ email: "", password: "" });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -52,18 +51,9 @@ export default function RegisterForm() {
       onSubmit={handleSubmit}
       style={{ maxWidth: 400, margin: "2rem auto" }}
     >
-      <h2>Create account</h2>
+      <h2>Log in</h2>
 
       <div style={{ display: "grid", gap: "0.75rem" }}>
-        <input
-          type="text"
-          name="name"
-          placeholder="Name"
-          value={form.name}
-          onChange={handleChange}
-          required
-        />
-
         <input
           type="email"
           name="email"
@@ -83,7 +73,7 @@ export default function RegisterForm() {
         />
 
         <button type="submit" disabled={loading}>
-          {loading ? "Creating..." : "Register"}
+          {loading ? "Logging in..." : "Log in"}
         </button>
       </div>
 

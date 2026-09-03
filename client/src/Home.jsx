@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { reqJoinRoom } from "./client";
 import socket from "./client";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
 
 export default function Home() {
   const joinIdRef = useRef();
   const navigate = useNavigate();
   const joinNameRef = useRef();
+  const { isLoggedIn } = useAuth();
 
   // to implement
   // on draw => send arrays of pixels?
@@ -94,13 +96,15 @@ export default function Home() {
     <div className="main">
       <div className="join-create-room-wrapper">
         {" "}
-        <div className="playerPanel">
-          <input
-            type="text"
-            defaultValue={defaultPlayerName}
-            ref={joinNameRef}
-          />
-        </div>
+        {isLoggedIn ? null : (
+          <div className="playerPanel">
+            <input
+              type="text"
+              defaultValue={defaultPlayerName}
+              ref={joinNameRef}
+            />
+          </div>
+        )}
         <form onSubmit={handleJoin}>
           <input
             id="room-id"

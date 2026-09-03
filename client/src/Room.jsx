@@ -15,7 +15,7 @@ import pfp from "./assets/pfp.webp";
 export default function Room() {
   const { roomId } = useParams();
   const [clientPlayerId, setClientPlayerId] = useState(() =>
-    localStorage.getItem("guestToken"),
+    localStorage.getItem("roomSessionToken"),
   );
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -96,7 +96,7 @@ export default function Room() {
       setMessages(nextRoom.messages ?? []);
       setDrawingData(nextRoom.drawingData ?? []);
       setPlayers(nextRoom.players ?? []);
-      const latestToken = localStorage.getItem("guestToken");
+      const latestToken = localStorage.getItem("roomSessionToken");
       if (latestToken && latestToken !== clientPlayerId) {
         setClientPlayerId(latestToken);
       }

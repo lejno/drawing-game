@@ -19,7 +19,7 @@ socket.on("error msg", (message) => {
 });
 
 socket.on("store token", (token) => {
-  localStorage.setItem("guestToken", token);
+  localStorage.setItem("roomSessionToken", token);
 });
 
 // socket.on("check cookie", () => {

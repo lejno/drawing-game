@@ -7,17 +7,25 @@ import Room from "./Room";
 import BrowseRooms from "./BrowseRooms";
 import CreateRoomPage from "./CreateRoomPage";
 import RegisterForm from "./RegisterForm";
+import LoginForm from "./LoginForm";
+import { AuthProvider } from "./AuthContext";
+import Header from "./Header";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/register" element={<RegisterForm />} />
-        <Route path="/create-room" element={<CreateRoomPage />} />
-        <Route path="/room/:roomId" element={<Room />} />
-        <Route path="/rooms/" element={<BrowseRooms />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Header />
+
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/register" element={<RegisterForm />} />
+          <Route path="/login" element={<LoginForm />}></Route>
+          <Route path="/create-room" element={<CreateRoomPage />} />
+          <Route path="/room/:roomId" element={<Room />} />
+          <Route path="/rooms/" element={<BrowseRooms />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   </StrictMode>,
 );
