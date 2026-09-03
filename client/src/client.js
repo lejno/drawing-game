@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const socket = io();
+const socket = io({ withCredentials: true });
 
 socket.on("connect", () => {
   console.log("connected to socket server:", socket.id);

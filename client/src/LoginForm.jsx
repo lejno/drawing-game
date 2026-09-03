@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./authContext";
 
 export default function LoginForm() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -36,7 +36,7 @@ export default function LoginForm() {
         throw new Error(firstError);
       }
 
-      login(data.token);
+      login();
       setSuccess("Login successful!");
       setForm({ email: "", password: "" });
     } catch (err) {

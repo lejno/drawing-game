@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { reqJoinRoom } from "./client";
 import socket from "./client";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./authContext";
 
 export default function Home() {
   const joinIdRef = useRef();
@@ -74,7 +74,7 @@ export default function Home() {
   function handleJoin(e) {
     e.preventDefault();
 
-    const token = localStorage.getItem("playerToken");
+    const token = localStorage.getItem("roomSessionToken");
 
     if (!joinIdRef.current.value.trim()) {
       submitError(joinIdRef, "Room ID is required");

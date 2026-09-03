@@ -37,7 +37,7 @@ export default function BrowseRooms() {
 
   function handleJoin(e, roomId) {
     e.preventDefault();
-    const token = localStorage.getItem("playerToken") || undefined;
+    const token = localStorage.getItem("roomSessionToken") || undefined;
     reqJoinRoom(roomId, randomName(), token);
   }
   return (

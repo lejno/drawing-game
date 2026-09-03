@@ -29,11 +29,21 @@ exports.login_post = [
         return res.status(400).json({ message: "Invalid credentials." });
       }
 
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-        expiresIn: "7d",
-      });
+      const token = jwt.sign(
+        { id: user._id.toString() },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: "7d",
+        },
+      );
 
-      res.status(200).json({ token });
+      res.cookie("token", token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      res.status(200).json({ message: "Login successful." });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Server error." });

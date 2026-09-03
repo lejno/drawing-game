@@ -14,7 +14,7 @@ export default function CreateRoomPage() {
   const roomNameRef = useRef();
   const playerNameRef = useRef();
   const roomSettings = useRef({ ...DEFAULT_ROOM_SETTINGS });
-  const token = localStorage.getItem("playerToken");
+  const token = localStorage.getItem("roomSessionToken");
 
   function submitError(inputRef, errorMsg) {
     const input = inputRef.current;

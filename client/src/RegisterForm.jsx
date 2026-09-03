@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./authContext";
 
 export default function RegisterForm() {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -37,7 +37,7 @@ export default function RegisterForm() {
       }
 
       setSuccess("Registration successful!");
-      login(data.token);
+      login();
       setForm({ name: "", email: "", password: "" });
       console.log("registered user:", data);
     } catch (err) {

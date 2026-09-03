@@ -1,29 +1,32 @@
-import { createContext, useContext, useState } from "react";
-
-const AuthContext = createContext(null);
+import { useEffect, useState } from "react";
+import socket from "./client";
+import { AuthContext } from "./authContext";
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem("playerToken"));
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  function login(newToken) {
-    localStorage.setItem("playerToken", newToken);
-    setToken(newToken);
+  useEffect(() => {
+    fetch("http://localhost:3000/api/me", { credentials: "include" })
+      .then((response) => setIsLoggedIn(response.ok))
+      .catch(() => setIsLoggedIn(false));
+  }, []);
+
+  function login() {
+    setIsLoggedIn(true);
+    socket.disconnect();
+    socket.connect();
   }
 
   function logout() {
-    localStorage.removeItem("playerToken");
-    setToken(null);
+    fetch("http://localhost:3000/api/logout", {
+      method: "POST",
+      credentials: "include",
+    }).finally(() => setIsLoggedIn(false));
   }
 
   return (
-    <AuthContext.Provider
-      value={{ token, isLoggedIn: Boolean(token), login, logout }}
-    >
+    <AuthContext.Provider value={{ isLoggedIn, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
 }
