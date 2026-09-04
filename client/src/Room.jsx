@@ -85,9 +85,8 @@ export default function Room() {
       if (nextRoom.selfPlayerId) {
         setClientPlayerId(nextRoom.selfPlayerId);
       }
-      const effectivePlayerId = nextRoom.selfPlayerId || clientPlayerId;
       const isInRoom = (nextRoom.players ?? []).some(
-        (p) => p.id === effectivePlayerId,
+        (p) => p.id === nextRoom.selfPlayerId,
       );
       setShowNamePrompt(!isInRoom);
       setCurrentDrawerId(nextRoom.currentDrawerId ?? null);
