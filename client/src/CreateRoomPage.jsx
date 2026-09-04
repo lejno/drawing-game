@@ -14,7 +14,6 @@ export default function CreateRoomPage() {
   const roomNameRef = useRef();
   const playerNameRef = useRef();
   const roomSettings = useRef({ ...DEFAULT_ROOM_SETTINGS });
-  const token = localStorage.getItem("roomSessionToken");
 
   function submitError(inputRef, errorMsg) {
     const input = inputRef.current;
@@ -77,7 +76,7 @@ export default function CreateRoomPage() {
       return;
     }
 
-    reqCreateRoom(roomName, playerName, token, roomSettings.current);
+    reqCreateRoom(roomName, playerName, roomSettings.current);
   }
 
   return (

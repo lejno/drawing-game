@@ -69,7 +69,7 @@ export default function Room() {
     socket.on("draw stroke", onDrawStroke);
     socket.on("drawing cleared", onDrawingCleared);
     socket.on("stroke undone", onStrokeUndone);
-    reqRoomData(roomId);
+    reqRoomData(roomId, localStorage.getItem("roomSessionToken") || undefined);
 
     return () => {
       socket.off("room sent", onRoomSent);

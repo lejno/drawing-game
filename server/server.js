@@ -1,5 +1,10 @@
 const express = require("express");
 const cors = require("cors");
+const dns = require("node:dns");
+const crypto = require("node:crypto");
+
+dns.setDefaultResultOrder("ipv4first");
+
 const app = express();
 const http = require("http");
 const server = http.createServer(app);
@@ -15,6 +20,7 @@ const io = new Server(server, {
   cors: {
     origin: ["http://localhost:5173", "http://localhost:3000"],
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 const path = require("path");
@@ -71,7 +77,14 @@ function getRandomWords(count = 3) {
   return [...words].sort(() => 0.5 - Math.random()).slice(0, count);
 }
 
-const playerSessions = new Map();
+function getPlayerPublicInfo(player) {
+  return {
+    id: player.id,
+    name: player.name,
+    score: player.score,
+    connected: player.connected,
+  };
+}
 
 function getPlayerBySocketId(room, socketId) {
   if (!room) return null;
@@ -83,6 +96,14 @@ function getPlayerById(room, playerId) {
   return room.players.find((player) => player.id === playerId) ?? null;
 }
 
+function getPlayerByRoomSessionId(room, roomSessionId) {
+  if (!room || typeof roomSessionId !== "string") return null;
+  return (
+    room.players.find((player) => player.roomSessionId === roomSessionId) ??
+    null
+  );
+}
+
 function clearDisconnectTimer(playerId) {
   const timer = disconnectTimers.get(playerId);
   if (!timer) {
@@ -91,19 +112,6 @@ function clearDisconnectTimer(playerId) {
 
   clearTimeout(timer);
   disconnectTimers.delete(playerId);
-}
-
-function resolvePlayerIdFromToken(token) {
-  if (typeof token !== "string" || token.trim().length === 0) {
-    return nanoid();
-  }
-
-  const normalized = token.trim();
-  if (playerSessions.has(normalized)) {
-    return normalized;
-  }
-
-  return nanoid();
 }
 
 function removePlayerFromRoom(roomId, playerId) {
@@ -128,8 +136,6 @@ function removePlayerFromRoom(roomId, playerId) {
   room.guessedCurrentWord = room.guessedCurrentWord.filter(
     (pid) => pid !== playerId,
   );
-  playerSessions.delete(playerId);
-
   if (room.players.length === 0) {
     clearRoomTimers(roomId);
     rooms.delete(roomId);
@@ -157,26 +163,42 @@ function removePlayerFromRoom(roomId, playerId) {
     maybeAdvanceIfAllGuessed(roomId);
   }
 
-  io.to(roomId).emit("room sent", serializeRoom(room));
+  emitRoomState(roomId);
 }
 
-function serializeRoom(room) {
+function serializeRoom(room, socket) {
+  const player = getPlayerBySocketId(room, socket.id);
+  const isDrawer = player?.id === room.currentDrawerId;
+
   return {
+    selfPlayerId: player?.id ?? null,
     adminId: room.adminId,
     started: room.started,
     name: room.name,
-    players: room.players,
-    toBePlayed: room.toBePlayed,
-    alreadyPlayed: room.alreadyPlayed,
+    players: room.players.map(getPlayerPublicInfo),
     currentDrawerId: room.currentDrawerId,
     guessedCurrentWord: room.guessedCurrentWord,
-    word: room.word,
-    wordChoices: room.wordChoices,
     messages: room.messages,
     drawingData: room.drawingData,
     pickDeadline: room.pickDeadline,
     roundDeadline: room.roundDeadline,
+
+    // Only the drawer receives these values.
+    word: isDrawer ? room.word : null,
+    wordChoices: isDrawer ? room.wordChoices : [],
   };
+}
+
+function emitRoomState(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  for (const socketId of io.sockets.adapter.rooms.get(roomId) ?? []) {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.emit("room sent", serializeRoom(room, socket));
+    }
+  }
 }
 
 app.use(
@@ -366,7 +388,7 @@ function createRoomState(name, safeSettings) {
   };
 }
 
-function handleCreateRoom(socket, name, playerName, token, settings) {
+function handleCreateRoom(socket, name, playerName, settings) {
   const safeSettings = {
     maxPlayers:
       Number.isFinite(settings?.maxPlayers) && settings.maxPlayers > 0
@@ -394,9 +416,10 @@ function handleCreateRoom(socket, name, playerName, token, settings) {
   const room = rooms.get(roomId);
   socket.join(roomId);
   socket.emit("room created", roomId);
-  const playerId = resolvePlayerIdFromToken(token);
+  const playerId = nanoid();
   const player = {
     id: playerId,
+    roomSessionId: crypto.randomBytes(32).toString("hex"),
     socketId: socket.id,
     name: playerName,
     score: 0,
@@ -406,23 +429,14 @@ function handleCreateRoom(socket, name, playerName, token, settings) {
   room.players.push(player);
   room.adminId = player.id;
   room.toBePlayed.push(player.id);
-  playerSessions.set(player.id, {
-    playerId: player.id,
-    roomId,
-  });
-  socket.emit("store token", player.id);
+  socket.emit("store token", player.roomSessionId);
   io.to(roomId).emit("msg", `room ${room.name} created id: ${roomId}`);
-  io.to(roomId).emit("room sent", serializeRoom(room));
+  emitRoomState(roomId);
   console.log(`${roomId}`);
 }
 
 function handleJoinRoom(socket, roomId, playerName, token) {
   const room = rooms.get(roomId);
-
-  if (room && room.players.length >= room.maxPlayers) {
-    socket.emit("error msg", "Room is full");
-    return;
-  }
 
   if (!room) {
     socket.emit("error msg", "Room does not exist");
@@ -430,7 +444,12 @@ function handleJoinRoom(socket, roomId, playerName, token) {
   }
   const providedToken =
     typeof token === "string" && token.trim().length > 0 ? token.trim() : null;
-  const foundPlayer = providedToken ? getPlayerById(room, providedToken) : null;
+  const foundPlayer = getPlayerByRoomSessionId(room, providedToken);
+
+  if (room.players.length >= room.maxPlayers && !foundPlayer) {
+    socket.emit("error msg", "Room is full");
+    return;
+  }
 
   if (
     foundPlayer &&
@@ -445,7 +464,7 @@ function handleJoinRoom(socket, roomId, playerName, token) {
   if (room.players.some((player) => player.socketId === socket.id)) {
     socket.join(roomId);
     socket.emit("room joined", roomId);
-    socket.emit("room sent", serializeRoom(room));
+    socket.emit("room sent", serializeRoom(room, socket));
     return;
   }
 
@@ -455,7 +474,7 @@ function handleJoinRoom(socket, roomId, playerName, token) {
     foundPlayer.connected = true;
     socket.join(roomId);
     socket.emit("room joined", roomId);
-    socket.emit("room sent", serializeRoom(room));
+    emitRoomState(roomId);
     return;
   }
 
@@ -463,9 +482,10 @@ function handleJoinRoom(socket, roomId, playerName, token) {
   console.log(`${socket.id} joined ${room.name} ${roomId}`);
   socket.join(roomId);
   socket.emit("room joined", roomId);
-  const playerId = resolvePlayerIdFromToken(providedToken);
+  const playerId = nanoid();
   const player = {
     id: playerId,
+    roomSessionId: crypto.randomBytes(32).toString("hex"),
     socketId: socket.id,
     name: playerName,
     score: 0,
@@ -473,13 +493,9 @@ function handleJoinRoom(socket, roomId, playerName, token) {
     roomId: roomId,
   };
   room.players.push(player);
-  playerSessions.set(player.id, {
-    playerId: player.id,
-    roomId,
-  });
-  socket.emit("store token", player.id);
+  socket.emit("store token", player.roomSessionId);
   room.toBePlayed.push(player.id);
-  io.to(roomId).emit("room sent", serializeRoom(room));
+  emitRoomState(roomId);
 }
 
 function levenshtein(a, b) {
@@ -554,7 +570,7 @@ function handleSendMessage(socket, msg, roomId) {
     const guessMsg = { id: "system", text: `${guessName} guessed the word!` };
     room.guessedCurrentWord.push(sender.id);
     room.messages.push(guessMsg);
-    io.to(roomId).emit("room sent", serializeRoom(room));
+    emitRoomState(roomId);
     io.to(roomId).emit("new message", guessMsg);
 
     maybeAdvanceIfAllGuessed(roomId);
@@ -681,7 +697,7 @@ function handleRoomData(socket, roomId, token) {
   const providedToken =
     typeof token === "string" && token.trim().length > 0 ? token.trim() : null;
   if (providedToken) {
-    const foundPlayer = getPlayerById(room, providedToken);
+    const foundPlayer = getPlayerByRoomSessionId(room, providedToken);
     if (foundPlayer) {
       if (
         foundPlayer.connected &&
@@ -698,11 +714,14 @@ function handleRoomData(socket, roomId, token) {
       clearDisconnectTimer(foundPlayer.id);
       foundPlayer.socketId = socket.id;
       foundPlayer.connected = true;
+      socket.join(roomId);
+      emitRoomState(roomId);
+      return;
     }
   }
 
   socket.join(roomId);
-  socket.emit("room sent", serializeRoom(room));
+  emitRoomState(roomId);
 }
 
 function handleDrawStroke(socket, stroke, roomId) {
@@ -733,7 +752,6 @@ function handleDrawStroke(socket, stroke, roomId) {
     strokeId: stroke.strokeId,
     tool: stroke.tool === "erase" ? "erase" : "draw",
     playerId: drawer.id,
-    socketId: socket.id,
   };
 
   room.drawingData.push(nextStroke);
@@ -821,7 +839,7 @@ function handleStartGame(roomId) {
     io.to(roomId).emit("error msg", "Game already started");
   } else {
     room.started = true;
-    io.to(roomId).emit("room sent", serializeRoom(room));
+    emitRoomState(roomId);
     handleNextTurn(roomId);
   }
 }
@@ -871,15 +889,14 @@ function handleNextTurn(roomId) {
     room.currentDrawerId = null;
     io.to(roomId).emit("drawer changed", { drawerId: null });
     room.started = false;
-    io.to(roomId).emit("room sent", serializeRoom(room));
+    emitRoomState(roomId);
     return;
   }
 
-  let currentDrawer = room.toBePlayed.shift();
+  const currentDrawer = room.toBePlayed.shift();
   room.currentDrawerId = currentDrawer;
   room.guessedCurrentWord = [];
   room.word = null;
-  room.wordChoices = null;
   const random3 = getRandomWords(3);
   room.wordChoices = random3;
   io.to(roomId).emit("drawer changed", {
@@ -960,8 +977,8 @@ io.use((socket, next) => {
 io.on("connection", (socket) => {
   console.log("a user connected:", socket.id);
 
-  socket.on("create room", (name, playerName, token, settings) => {
-    handleCreateRoom(socket, name, playerName, token, settings);
+  socket.on("create room", (name, playerName, settings) => {
+    handleCreateRoom(socket, name, playerName, settings);
   });
   socket.on("join room", (roomId, playerName, token) => {
     handleJoinRoom(socket, roomId, playerName, token);
@@ -1033,7 +1050,7 @@ io.on("connection", (socket) => {
         removePlayerFromRoom(roomId, disconnectedPlayer.id);
       }, DISCONNECT_GRACE_MS);
       disconnectTimers.set(disconnectedPlayer.id, removeTimer);
-      io.to(roomId).emit("room sent", serializeRoom(room));
+      emitRoomState(roomId);
     });
   });
 });

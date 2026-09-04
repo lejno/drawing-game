@@ -17,4 +17,10 @@
 - [ ] handle max players on join: allow if players < 8, otherwise delist room from joinable when max is reached
 - [ ] token change needs testing + ui
 
-connect login user info to game
+need to connect mongodb data with player
+
+fetch data from db store in server for room? pass down db data somehow? client downloads it and stores it for the room?
+
+DO NOT SEND DATA TO CLIENT - WORD, SOCKETID ETC
+send only requested data?
+vairfy actions

@@ -14,9 +14,7 @@ import pfp from "./assets/pfp.webp";
 
 export default function Room() {
   const { roomId } = useParams();
-  const [clientPlayerId, setClientPlayerId] = useState(() =>
-    localStorage.getItem("roomSessionToken"),
-  );
+  const [clientPlayerId, setClientPlayerId] = useState(null);
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [drawingData, setDrawingData] = useState([]);
@@ -79,31 +77,17 @@ export default function Room() {
   });
 
   useEffect(() => {
-    function onStoreToken(token) {
-      setClientPlayerId(token);
-    }
-
-    socket.on("store token", onStoreToken);
-
-    return () => {
-      socket.off("store token", onStoreToken);
-    };
-  }, []);
-
-  useEffect(() => {
     function onRoomSent(nextRoom) {
       setRoom(nextRoom);
       setMessages(nextRoom.messages ?? []);
       setDrawingData(nextRoom.drawingData ?? []);
       setPlayers(nextRoom.players ?? []);
-      const latestToken = localStorage.getItem("roomSessionToken");
-      if (latestToken && latestToken !== clientPlayerId) {
-        setClientPlayerId(latestToken);
+      if (nextRoom.selfPlayerId) {
+        setClientPlayerId(nextRoom.selfPlayerId);
       }
-
-      const effectivePlayerId = latestToken || clientPlayerId;
+      const effectivePlayerId = nextRoom.selfPlayerId || clientPlayerId;
       const isInRoom = (nextRoom.players ?? []).some(
-        (p) => p.id === effectivePlayerId || p.socketId === socket.id,
+        (p) => p.id === effectivePlayerId,
       );
       setShowNamePrompt(!isInRoom);
       setCurrentDrawerId(nextRoom.currentDrawerId ?? null);
@@ -213,7 +197,7 @@ export default function Room() {
     socket.on("word auto selected", onWordAutoSelected);
     socket.on("intermission started", onIntermissionStarted);
     socket.on("error msg", onErrorMessage);
-    reqRoomData(roomId, clientPlayerId || undefined);
+    reqRoomData(roomId, localStorage.getItem("roomSessionToken") || undefined);
 
     return () => {
       socket.off("room sent", onRoomSent);
@@ -231,7 +215,7 @@ export default function Room() {
       socket.off("intermission started", onIntermissionStarted);
       socket.off("error msg", onErrorMessage);
     };
-  }, [roomId, clientPlayerId]);
+  }, [roomId]);
 
   const intermissionText =
     intermissionSecondsLeft > 0 && intermissionNextDrawerId
@@ -249,7 +233,11 @@ export default function Room() {
         Math.floor(Math.random() * 1000)
           .toString()
           .padStart(3, "0");
-    reqJoinRoom(roomId, name, clientPlayerId || undefined);
+    reqJoinRoom(
+      roomId,
+      name,
+      localStorage.getItem("roomSessionToken") || undefined,
+    );
     setShowNamePrompt(false);
   }
 

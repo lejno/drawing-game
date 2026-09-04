@@ -55,19 +55,19 @@ export function reqUndoStroke(roomId) {
   socket.emit("undo stroke", roomId);
 }
 
-export function reqRoomData(roomId, token) {
-  socket.emit("request room data", roomId, token);
+export function reqRoomData(roomId, roomSessionToken) {
+  socket.emit("request room data", roomId, roomSessionToken);
 }
 
 export function reqSendMessage(msg, roomId) {
   socket.emit("send message", msg, roomId);
   console.log(`${msg} ${socket.id}`);
 }
-export function reqJoinRoom(roomId, playerName, token) {
-  socket.emit("join room", roomId, playerName, token);
+export function reqJoinRoom(roomId, playerName, roomSessionToken) {
+  socket.emit("join room", roomId, playerName, roomSessionToken);
 }
-export function reqCreateRoom(name, playerName, token, settings) {
-  socket.emit("create room", name, playerName, token, settings);
+export function reqCreateRoom(name, playerName, settings) {
+  socket.emit("create room", name, playerName, settings);
 }
 
 export default socket;
