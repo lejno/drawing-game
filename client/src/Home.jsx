@@ -81,15 +81,11 @@ export default function Home() {
       return;
     }
 
-    if (!joinNameRef.current.value.trim()) {
-      joinNameRef.current.value = defaultPlayerName;
-    }
+    const playerName = isLoggedIn
+      ? null
+      : joinNameRef.current.value.trim() || defaultPlayerName;
 
-    reqJoinRoom(
-      joinIdRef.current.value,
-      joinNameRef.current?.value,
-      token || undefined,
-    );
+    reqJoinRoom(joinIdRef.current.value, playerName, token || undefined);
   }
 
   return (

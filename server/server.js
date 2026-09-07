@@ -24,6 +24,7 @@ const io = new Server(server, {
   },
 });
 const path = require("path");
+const User = require("./models/user");
 const { nanoid } = require("nanoid");
 const rooms = new Map();
 const pickTimers = new Map();
@@ -412,21 +413,24 @@ function handleCreateRoom(socket, name, playerName, settings) {
   }
 
   rooms.set(roomId, createRoomState(name, safeSettings));
+  const user = socket.data.user;
 
   const room = rooms.get(roomId);
   socket.join(roomId);
   socket.emit("room created", roomId);
-  const playerId = nanoid();
   const player = {
-    id: playerId,
+    id: nanoid(),
+    userId: user?.id ?? null,
     roomSessionId: crypto.randomBytes(32).toString("hex"),
     socketId: socket.id,
-    name: playerName,
+    name: user?.name ?? playerName,
     score: 0,
     connected: true,
-    roomId: roomId,
+    roomId,
   };
+
   room.players.push(player);
+  console.log(player.name);
   room.adminId = player.id;
   room.toBePlayed.push(player.id);
   socket.emit("store token", player.roomSessionId);
@@ -478,19 +482,21 @@ function handleJoinRoom(socket, roomId, playerName, token) {
     return;
   }
 
+  const user = socket.data.user;
+
   socket.emit("msg", `welcome to the ${roomId}`);
   console.log(`${socket.id} joined ${room.name} ${roomId}`);
   socket.join(roomId);
   socket.emit("room joined", roomId);
-  const playerId = nanoid();
   const player = {
-    id: playerId,
+    id: nanoid(),
+    userId: user?.id ?? null,
     roomSessionId: crypto.randomBytes(32).toString("hex"),
     socketId: socket.id,
-    name: playerName,
+    name: user?.name ?? playerName,
     score: 0,
     connected: true,
-    roomId: roomId,
+    roomId,
   };
   room.players.push(player);
   socket.emit("store token", player.roomSessionId);
@@ -963,15 +969,36 @@ function handleWordChosen(socket, roomId, chosenWord) {
   startAfkTimer(roomId);
 }
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = getTokenFromCookie(socket.handshake.headers.cookie);
-  if (!token) return next();
 
-  const user = verifyToken(token);
-  if (!user) return next(new Error("Invalid authentication token."));
+  if (!token) {
+    socket.data.user = null; // guest
+    return next();
+  }
 
-  socket.user = user;
-  next();
+  const payload = verifyToken(token);
+  if (!payload) {
+    return next(new Error("Invalid authentication token."));
+  }
+
+  try {
+    const user = await User.findById(payload.id).select("_id name").lean();
+
+    if (!user) {
+      return next(new Error("User not found."));
+    }
+
+    socket.data.user = {
+      id: user._id.toString(),
+      name: user.name,
+    };
+
+    next();
+  } catch (err) {
+    console.log(err);
+    next(new Error("Authentication failed."));
+  }
 });
 
 io.on("connection", (socket) => {

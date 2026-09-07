@@ -24,7 +24,7 @@ function verifyToken(token) {
 function authenticateRequest(req, res, next) {
   const payload = verifyToken(getTokenFromCookie(req.headers.cookie));
   if (!payload) {
-    return res.status(401).json({ message: "Authentication required." });
+    return res.status(401).json({ message: "Authentication equired." });
   }
 
   req.user = payload;

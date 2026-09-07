@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import socket from "./client";
 import { useNavigate } from "react-router-dom";
 import { reqCreateRoom } from "./client";
+import { useAuth } from "./authContext";
 
 const DEFAULT_ROOM_SETTINGS = {
   maxPlayers: 8,
@@ -11,6 +12,7 @@ const DEFAULT_ROOM_SETTINGS = {
 
 export default function CreateRoomPage() {
   const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
   const roomNameRef = useRef();
   const playerNameRef = useRef();
   const roomSettings = useRef({ ...DEFAULT_ROOM_SETTINGS });
@@ -64,14 +66,14 @@ export default function CreateRoomPage() {
   function handleSubmit(e) {
     e.preventDefault();
     const roomName = roomNameRef.current.value.trim();
-    const playerName = playerNameRef.current.value.trim();
+    const playerName = isLoggedIn ? null : playerNameRef.current.value.trim();
 
     if (!roomName) {
       submitError(roomNameRef, "Room name cannot be empty");
       return;
     }
 
-    if (!playerName) {
+    if (!isLoggedIn && !playerName) {
       submitError(playerNameRef, "Player name cannot be empty");
       return;
     }
@@ -89,13 +91,15 @@ export default function CreateRoomPage() {
           placeholder="Room Name"
           maxLength={20}
         />
-        <input
-          ref={playerNameRef}
-          type="text"
-          placeholder="Player Name"
-          defaultValue={defaultPlayerName}
-          maxLength={20}
-        />
+        {!isLoggedIn && (
+          <input
+            ref={playerNameRef}
+            type="text"
+            placeholder="Player Name"
+            defaultValue={defaultPlayerName}
+            maxLength={20}
+          />
+        )}
         <input
           type="number"
           placeholder="Max Players"
