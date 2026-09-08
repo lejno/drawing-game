@@ -60,6 +60,7 @@ app.post("/api/logout", (req, res) => {
   });
   res.status(204).end();
 });
+// The /api/me endpoint confirms whether the request has a valid login cookie.
 app.get("/api/me", authenticateRequest, (req, res) => {
   res.json({ userId: req.user.id });
 });
@@ -969,6 +970,8 @@ function handleWordChosen(socket, roomId, chosenWord) {
   startAfkTimer(roomId);
 }
 
+// Authenticate logged-in Socket.IO clients from the same JWT cookie used by HTTP routes.
+// Connections without a cookie are allowed to continue as guests.
 io.use(async (socket, next) => {
   const token = getTokenFromCookie(socket.handshake.headers.cookie);
 

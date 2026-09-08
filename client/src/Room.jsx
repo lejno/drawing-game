@@ -34,6 +34,7 @@ export default function Room() {
   const [errorMsg, setErrorMsg] = useState("");
   const [pendingName, setPendingName] = useState("");
   const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [clipboardNotification, setClipboardNotification] = useState(false);
   const renderCountRef = useRef(0);
   const prevRenderStateRef = useRef({ roomId: undefined, room: undefined });
 
@@ -246,6 +247,38 @@ export default function Room() {
     setHasChosenWord(true);
     setCurrentWord(word);
   }
+  function copyLink() {
+    const dummy = document.createElement("input");
+    const text = window.location.href;
+
+    document.body.appendChild(dummy);
+    dummy.value = text;
+    dummy.select();
+    document.execCommand("copy");
+    document.body.removeChild(dummy);
+
+    setClipboardNotification(true);
+
+    setTimeout(() => {
+      setClipboardNotification(false);
+    }, 3000);
+  }
+
+  function copyId() {
+    const dummy = document.createElement("input");
+    const text = roomId;
+
+    document.body.appendChild(dummy);
+    dummy.value = text;
+    dummy.select();
+    document.execCommand("copy");
+    document.body.removeChild(dummy);
+    setClipboardNotification(true);
+
+    setTimeout(() => {
+      setClipboardNotification(false);
+    }, 3000);
+  }
 
   function renderPlayers(players) {
     const users = players.map((player) => ({
@@ -283,6 +316,16 @@ export default function Room() {
     <div className="room-layout">
       <div className="room-info">
         <h1 className="room-name">Room: {room?.name}</h1>
+        <h1 className="room-id-info">ID: {roomId}</h1>
+        <button className="share-button" onClick={copyLink}>
+          Copy Link
+        </button>
+        <button className="share-button" onClick={copyId}>
+          Copy ID
+        </button>
+        {clipboardNotification && (
+          <p className="clipboard-notification">Copied to Clipboard!</p>
+        )}
       </div>
       <div className="players-display">
         <h2>Players:</h2>
